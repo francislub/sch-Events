@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  email          String    @unique
+  password       String
+  role           Role      @default(STUDENT)
+  studentId      String?
+  grade          String?
+  department     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  events         Event[]   @relation("EventOrganizer")
+  registrations  Registration[]
+  notifications  Notification[]
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+model Event {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  title               String
+  description         String
+  date                DateTime
+  startTime           String
+  endTime             String
+  location            String
+  category            String
+  image               String?
+  capacity            Int?
+  registrationDeadline DateTime?
+  isPublic            Boolean   @default(true)
+  requiresApproval    Boolean   @default(false)
+  organizerId         String    @db.ObjectId
+  organizer           User      @relation("EventOrganizer", fields: [organizerId], references: [id])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  registrations       Registration[]
+  resources           Resource[]
+  scheduleItems       ScheduleItem[]
+}
+
+model Registration {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  user      User      @relation(fields: [userId], references: [id])
+  eventId   String    @db.ObjectId
+  event     Event     @relation(fields: [eventId], references: [id])
+  status    RegistrationStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, eventId])
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ATTENDED
+}
+
+model Resource {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  type      String
+  quantity  Int
+  eventId   String    @db.ObjectId
+  event     Event     @relation(fields: [eventId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ScheduleItem {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  startTime String
+  endTime   String
+  location  String
+  eventId   String    @db.ObjectId
+  event     Event     @relation(fields: [eventId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Notification {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  message   String
+  userId    String    @db.ObjectId
+  user      User      @relation(fields: [userId], references: [id])
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
+
+model ContactMessage {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    ContactMessageStatus @default(UNREAD)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum ContactMessageStatus {
+  UNREAD
+  READ
+}
+
