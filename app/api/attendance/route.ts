@@ -24,40 +24,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // If teacher, verify they teach the student
-    if (session.user.role === "TEACHER") {
-      const teacher = await db.teacher.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-        include: {
-          classes: {
-            include: {
-              students: {
-                where: {
-                  id: studentId,
-                },
-              },
-            },
-          },
-        },
-      })
-
-      if (!teacher) {
-        return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 })
-      }
-
-      // Check if student is in one of the teacher's classes
-      const hasStudent = teacher.classes.some((cls) => cls.students.some((student) => student.id === studentId))
-
-      if (!hasStudent) {
-        return NextResponse.json(
-          { error: "You are not authorized to mark attendance for this student" },
-          { status: 403 },
-        )
-      }
-    }
-
     // Check if attendance record already exists for this date and student
     const existingAttendance = await db.attendance.findFirst({
       where: {
@@ -113,6 +79,9 @@ export async function GET(req: Request) {
     const classId = searchParams.get("classId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
+    const status = searchParams.get("status")
+    const grade = searchParams.get("grade")
+    const section = searchParams.get("section")
 
     // Build filter
     const filter: any = {}
@@ -133,8 +102,12 @@ export async function GET(req: Request) {
       }
     }
 
+    if (status) {
+      filter.status = status
+    }
+
     // If class ID is provided, get all students in that class
-    if (classId && !studentId) {
+    if (classId) {
       const students = await db.student.findMany({
         where: {
           classId,
@@ -148,6 +121,37 @@ export async function GET(req: Request) {
 
       filter.studentId = {
         in: studentIds,
+      }
+    }
+
+    // If grade and/or section is provided, filter students by grade/section
+    if (grade || section) {
+      const studentFilter: any = {}
+
+      if (grade) {
+        studentFilter.grade = grade
+      }
+
+      if (section) {
+        studentFilter.section = section
+      }
+
+      const students = await db.student.findMany({
+        where: studentFilter,
+        select: {
+          id: true,
+        },
+      })
+
+      const studentIds = students.map((student) => student.id)
+
+      // If studentId filter already exists, intersect with the new filter
+      if (filter.studentId && filter.studentId.in) {
+        filter.studentId.in = filter.studentId.in.filter((id: string) => studentIds.includes(id))
+      } else {
+        filter.studentId = {
+          in: studentIds,
+        }
       }
     }
 
@@ -172,7 +176,13 @@ export async function GET(req: Request) {
 
       const childrenIds = parent.children.map((child) => child.id)
 
-      if (!studentId || !childrenIds.includes(studentId)) {
+      // If studentId filter already exists, intersect with the new filter
+      if (filter.studentId && filter.studentId.in) {
+        filter.studentId.in = filter.studentId.in.filter((id: string) => childrenIds.includes(id))
+      } else if (studentId && !childrenIds.includes(studentId)) {
+        // If specific studentId is requested but not a child of this parent
+        return NextResponse.json({ error: "Unauthorized to view this student's attendance" }, { status: 403 })
+      } else {
         filter.studentId = {
           in: childrenIds,
         }
@@ -180,7 +190,7 @@ export async function GET(req: Request) {
     }
 
     // If teacher, only show attendance for students they teach
-    if (session.user.role === "TEACHER" && !studentId && !classId) {
+    if (session.user.role === "TEACHER" && !studentId && !classId && !grade && !section) {
       const teacher = await db.teacher.findUnique({
         where: {
           userId: session.user.id,
@@ -204,12 +214,21 @@ export async function GET(req: Request) {
 
       const studentIds = teacher.classes.flatMap((cls) => cls.students.map((student) => student.id))
 
-      filter.studentId = {
-        in: studentIds,
+      // If studentId filter already exists, intersect with the new filter
+      if (filter.studentId && filter.studentId.in) {
+        filter.studentId.in = filter.studentId.in.filter((id: string) => studentIds.includes(id))
+      } else {
+        filter.studentId = {
+          in: studentIds,
+        }
       }
     }
 
-    // Get attendance records
+    // Get attendance records with pagination
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
+    const skip = (page - 1) * limit
+
     const attendance = await db.attendance.findMany({
       where: filter,
       include: {
@@ -224,6 +243,15 @@ export async function GET(req: Request) {
               select: {
                 id: true,
                 name: true,
+                teacher: {
+                  include: {
+                    user: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -232,11 +260,79 @@ export async function GET(req: Request) {
       orderBy: {
         date: "desc",
       },
+      skip,
+      take: limit,
     })
 
-    return NextResponse.json(attendance)
+    // Get total count for pagination
+    const totalCount = await db.attendance.count({
+      where: filter,
+    })
+
+    // Get attendance statistics
+    const stats = await db.attendance.groupBy({
+      by: ["status"],
+      where: filter,
+      _count: {
+        status: true,
+      },
+    })
+
+    const statistics = {
+      total: totalCount,
+      present: stats.find((s) => s.status === "Present")?._count.status || 0,
+      absent: stats.find((s) => s.status === "Absent")?._count.status || 0,
+      late: stats.find((s) => s.status === "Late")?._count.status || 0,
+    }
+
+    return NextResponse.json({
+      attendance,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        pages: Math.ceil(totalCount / limit),
+      },
+      statistics,
+    })
   } catch (error) {
     console.error("Error fetching attendance:", error)
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+  }
+}
+
+// Add a DELETE method to allow admins to delete attendance records
+export async function DELETE(req: Request) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Only admins can delete attendance records
+    if (session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing attendance record ID" }, { status: 400 })
+    }
+
+    // Delete the attendance record
+    await db.attendance.delete({
+      where: {
+        id,
+      },
+    })
+
+    return NextResponse.json({ message: "Attendance record deleted successfully" }, { status: 200 })
+  } catch (error) {
+    console.error("Error deleting attendance record:", error)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

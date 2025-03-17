@@ -2,133 +2,254 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { signOut } from "next-auth/react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
   BookOpen,
   Calendar,
-  ChevronDown,
-  ClipboardList,
-  Home,
+  GraduationCap,
+  LayoutDashboard,
   LogOut,
   MessageSquare,
   Settings,
-  User,
   Users,
+  UserCircle,
+  FileText,
+  Clock,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { useMobile } from "@/hooks/use-mobile"
+import { useToast } from "@/hooks/use-toast"
 
-export default function Sidebar() {
+interface SidebarProps {
+  role?: string
+  userName?: string
+}
+
+export default function Sidebar({ role = "admin", userName = "User" }: SidebarProps) {
   const pathname = usePathname()
-  const isMobile = useMobile()
-  const [isOpen, setIsOpen] = useState(!isMobile)
-  const [userRole, setUserRole] = useState<string>("parent")
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isMobile, setIsMobile] = useState(false)
+  const normalizedRole = (role || "admin").toLowerCase()
 
+  // Check if the window is mobile size
   useEffect(() => {
-    // Extract role from URL path
-    const path = pathname.split("/")
-    if (path.length > 2 && path[1] === "dashboard") {
-      setUserRole(path[2])
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768)
     }
-  }, [pathname])
 
-  const toggleSidebar = () => {
-    setIsOpen(!isOpen)
+    checkIfMobile()
+    window.addEventListener("resize", checkIfMobile)
+
+    return () => {
+      window.removeEventListener("resize", checkIfMobile)
+    }
+  }, [])
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut({ redirect: false })
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out of your account.",
+      })
+      router.push("/login")
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "There was a problem logging out. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  return (
-    <>
-      {isMobile && (
-        <Button variant="outline" size="icon" className="fixed top-4 left-4 z-50" onClick={toggleSidebar}>
-          <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
-        </Button>
-      )}
+  // Define navigation items based on role
+  const getNavItems = () => {
+    const baseItems = [
+      {
+        title: "Dashboard",
+        href: `/dashboard/${normalizedRole}`,
+        icon: LayoutDashboard,
+      },
+      {
+        title: "Messages",
+        href: `/dashboard/${normalizedRole}/messages`,
+        icon: MessageSquare,
+      },
+      {
+        title: "Profile",
+        href: `/dashboard/${normalizedRole}/profile`,
+        icon: UserCircle,
+      },
+    ]
 
-      <div
-        className={cn(
-          "bg-white border-r shadow-sm transition-all duration-300 z-40",
-          isOpen ? "w-64" : isMobile ? "w-0" : "w-16",
-          isMobile && !isOpen && "hidden",
-        )}
-      >
-        <div className="p-4 border-b">
-          <h2
-            className={cn(
-              "font-bold text-blue-800 transition-all overflow-hidden whitespace-nowrap",
-              isOpen ? "text-xl" : "text-xs text-center",
-            )}
-          >
-            {isOpen ? "Wobulenzi High" : "WHS"}
-          </h2>
+    const adminItems = [
+      {
+        title: "Students",
+        href: "/dashboard/admin/students",
+        icon: GraduationCap,
+      },
+      {
+        title: "Teachers",
+        href: "/dashboard/admin/teachers",
+        icon: Users,
+      },
+      {
+        title: "Classes",
+        href: "/dashboard/admin/classes",
+        icon: BookOpen,
+      },
+      {
+        title: "Attendance",
+        href: "/dashboard/admin/attendance",
+        icon: Clock,
+      },
+      {
+        title: "Events",
+        href: "/dashboard/admin/events",
+        icon: Calendar,
+      },
+      {
+        title: "Settings",
+        href: "/dashboard/admin/settings",
+        icon: Settings,
+      },
+    ]
+
+    const teacherItems = [
+      {
+        title: "Classes",
+        href: "/dashboard/teacher/classes",
+        icon: BookOpen,
+      },
+      {
+        title: "Students",
+        href: "/dashboard/teacher/students",
+        icon: GraduationCap,
+      },
+      {
+        title: "Attendance",
+        href: "/dashboard/teacher/attendance",
+        icon: Clock,
+      },
+      {
+        title: "Grades",
+        href: "/dashboard/teacher/grades",
+        icon: FileText,
+      },
+    ]
+
+    const parentItems = [
+      {
+        title: "Children",
+        href: "/dashboard/parent/children",
+        icon: Users,
+      },
+      {
+        title: "Attendance",
+        href: "/dashboard/parent/attendance",
+        icon: Clock,
+      },
+      {
+        title: "Grades",
+        href: "/dashboard/parent/grades",
+        icon: FileText,
+      },
+      {
+        title: "Events",
+        href: "/dashboard/parent/events",
+        icon: Calendar,
+      },
+    ]
+
+    const studentItems = [
+      {
+        title: "Classes",
+        href: "/dashboard/student/classes",
+        icon: BookOpen,
+      },
+      {
+        title: "Grades",
+        href: "/dashboard/student/grades",
+        icon: FileText,
+      },
+      {
+        title: "Attendance",
+        href: "/dashboard/student/attendance",
+        icon: Clock,
+      },
+      {
+        title: "Schedule",
+        href: "/dashboard/student/schedule",
+        icon: Calendar,
+      },
+    ]
+
+    switch (normalizedRole) {
+      case "admin":
+        return [...baseItems, ...adminItems]
+      case "teacher":
+        return [...baseItems, ...teacherItems]
+      case "parent":
+        return [...baseItems, ...parentItems]
+      case "student":
+        return [...baseItems, ...studentItems]
+      default:
+        return baseItems
+    }
+  }
+
+  const navItems = getNavItems()
+
+  return (
+    <div
+      data-sidebar="true"
+      className={cn(
+        "fixed top-0 left-0 h-full bg-slate-900 text-white z-40 transition-all duration-300 ease-in-out",
+        isMobile ? "-translate-x-full" : "translate-x-0",
+        "w-64",
+      )}
+    >
+      <div className="h-full flex flex-col">
+        <div className="p-6 border-b border-slate-700">
+          <h2 className="text-xl font-bold">School Management</h2>
+          <p className="text-sm text-slate-400 mt-1">Welcome, {userName}</p>
         </div>
 
-        <div className="py-4">
-          <nav className="space-y-1 px-2">
-            {getNavItems(userRole).map((item, index) => (
+        <div className="flex-1 overflow-y-auto py-4">
+          <nav className="px-4 space-y-1">
+            {navItems.map((item) => (
               <Link
-                key={index}
+                key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center px-2 py-2 rounded-md text-sm font-medium transition-colors",
-                  pathname === item.href ? "bg-blue-100 text-blue-800" : "text-gray-600 hover:bg-gray-100",
-                  !isOpen && "justify-center",
+                  "flex items-center px-4 py-3 text-sm rounded-md transition-colors",
+                  pathname === item.href
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white",
                 )}
               >
-                <item.icon className={cn("h-5 w-5", !isOpen && "mx-auto")} />
-                {isOpen && <span className="ml-3">{item.name}</span>}
+                <item.icon className="mr-3 h-5 w-5" />
+                {item.title}
               </Link>
             ))}
           </nav>
         </div>
 
-        <div className="absolute bottom-0 w-full p-4 border-t">
-          <Link
-            href="/"
-            className={cn(
-              "flex items-center px-2 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors",
-              !isOpen && "justify-center",
-            )}
+        <div className="p-4 border-t border-slate-700">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white"
+            onClick={handleLogout}
           >
-            <LogOut className={cn("h-5 w-5", !isOpen && "mx-auto")} />
-            {isOpen && <span className="ml-3">Logout</span>}
-          </Link>
+            <LogOut className="mr-3 h-5 w-5" />
+            Logout
+          </Button>
         </div>
       </div>
-    </>
+    </div>
   )
-}
-
-function getNavItems(role: string) {
-  const commonItems = [
-    { name: "Dashboard", href: `/dashboard/${role}`, icon: Home },
-    { name: "Profile", href: `/dashboard/${role}/profile`, icon: User },
-    { name: "Messages", href: `/dashboard/${role}/messages`, icon: MessageSquare },
-    { name: "Settings", href: `/dashboard/${role}/settings`, icon: Settings },
-  ]
-
-  const roleSpecificItems = {
-    parent: [
-      { name: "My Children", href: `/dashboard/parent/children`, icon: Users },
-      { name: "Attendance", href: `/dashboard/parent/attendance`, icon: ClipboardList },
-      { name: "Academic Records", href: `/dashboard/parent/academics`, icon: BookOpen },
-      { name: "Events", href: `/dashboard/parent/events`, icon: Calendar },
-    ],
-    teacher: [
-      { name: "My Classes", href: `/dashboard/teacher/classes`, icon: Users },
-      { name: "Attendance", href: `/dashboard/teacher/attendance`, icon: ClipboardList },
-      { name: "Grades", href: `/dashboard/teacher/grades`, icon: BookOpen },
-      { name: "Schedule", href: `/dashboard/teacher/schedule`, icon: Calendar },
-    ],
-    admin: [
-      { name: "Students", href: `/dashboard/admin/students`, icon: Users },
-      { name: "Teachers", href: `/dashboard/admin/teachers`, icon: Users },
-      { name: "Classes", href: `/dashboard/admin/classes`, icon: BookOpen },
-      { name: "Attendance", href: `/dashboard/admin/attendance`, icon: ClipboardList },
-      { name: "Events", href: `/dashboard/admin/events`, icon: Calendar },
-    ],
-  }
-
-  return [...commonItems, ...(roleSpecificItems[role as keyof typeof roleSpecificItems] || [])]
 }
 
