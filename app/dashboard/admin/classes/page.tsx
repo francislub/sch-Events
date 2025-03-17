@@ -16,8 +16,8 @@ export default function AdminClasses() {
   const { toast } = useToast()
   
   const [filter, setFilter] = useState({
-    grade: "",
-    teacher: "",
+    grade: "all", // Changed from empty string to "all"
+    teacher: "all", // Changed from empty string to "all"
     search: ""
   })
   
@@ -143,8 +143,8 @@ export default function AdminClasses() {
   
   // Filter classes
   const filteredClasses = classes.filter(cls => {
-    const matchesGrade = !filter.grade || cls.grade === filter.grade
-    const matchesTeacher = !filter.teacher || cls.teacher.id === filter.teacher
+    const matchesGrade = filter.grade === "all" || cls.grade === filter.grade
+    const matchesTeacher = filter.teacher === "all" || cls.teacher.id === filter.teacher
     const matchesSearch = !filter.search || 
       cls.name.toLowerCase().includes(filter.search.toLowerCase()) ||
       cls.grade.toLowerCase().includes(filter.search.toLowerCase()) ||
@@ -206,7 +206,7 @@ export default function AdminClasses() {
                   <SelectValue placeholder="All Grades" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Grades</SelectItem>
+                  <SelectItem value="all">All Grades</SelectItem>
                   {grades.map(grade => (
                     <SelectItem key={grade} value={grade}>
                       Grade {grade}
@@ -223,7 +223,7 @@ export default function AdminClasses() {
                   <SelectValue placeholder="All Teachers" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Teachers</SelectItem>
+                  <SelectItem value="all">All Teachers</SelectItem>
                   {teachers.map(teacher => (
                     <SelectItem key={teacher.id} value={teacher.id}>
                       {teacher.user.name}

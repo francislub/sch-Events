@@ -5,164 +5,48 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// import { useToast } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
-import { Plus, Download, Search, MoreHorizontal, FileText, Trash2, Edit, Mail } from 'lucide-react'
+import { Plus, Download, Search, MoreHorizontal, FileText, Trash2, Edit, Mail } from "lucide-react"
 import Link from "next/link"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 
 export default function AdminTeachers() {
   const router = useRouter()
   const { toast } = useToast()
-  
+
   const [filter, setFilter] = useState({
-    department: "",
-    search: ""
+    department: "all", // Changed from empty string to "all"
+    search: "",
   })
-  
+
   const [teachers, setTeachers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  
+
   // Fetch teachers data
   useEffect(() => {
     const fetchTeachers = async () => {
       try {
         // In a real app, this would be a fetch call to your API
-        // const response = await fetch('/api/teachers')
-        // const data = await response.json()
-        // setTeachers(data)
-
-        // Mock data for demonstration
-        setTimeout(() => {
-          const mockTeachers = [
-            {
-              id: "T101",
-              user: {
-                id: "101",
-                name: "Ms. Johnson",
-                email: "johnson@wobulenzihigh.edu"
-              },
-              department: "Mathematics",
-              qualification: "M.Sc. Mathematics, B.Ed.",
-              contactNumber: "+1 234-567-8910",
-              classes: [
-                { id: "1", name: "10A" },
-                { id: "2", name: "10B" },
-                { id: "3", name: "9A" },
-                { id: "4", name: "9B" },
-                { id: "5", name: "10Adv" }
-              ]
-            },
-            {
-              id: "T102",
-              user: {
-                id: "102",
-                name: "Mr. Smith",
-                email: "smith@wobulenzihigh.edu"
-              },
-              department: "Science",
-              qualification: "Ph.D. Chemistry",
-              contactNumber: "+1 234-567-8911",
-              classes: [
-                { id: "6", name: "10A" },
-                { id: "7", name: "10B" },
-                { id: "8", name: "9A" },
-                { id: "9", name: "9B" }
-              ]
-            },
-            {
-              id: "T103",
-              user: {
-                id: "103",
-                name: "Mrs. Davis",
-                email: "davis@wobulenzihigh.edu"
-              },
-              department: "English",
-              qualification: "M.A. English Literature",
-              contactNumber: "+1 234-567-8912",
-              classes: [
-                { id: "10", name: "11A" },
-                { id: "11", name: "11B" },
-                { id: "12", name: "12A" },
-                { id: "13", name: "12B" },
-                { id: "14", name: "10A" },
-                { id: "15", name: "10B" }
-              ]
-            },
-            {
-              id: "T104",
-              user: {
-                id: "104",
-                name: "Mr. Wilson",
-                email: "wilson@wobulenzihigh.edu"
-              },
-              department: "History",
-              qualification: "M.A. History",
-              contactNumber: "+1 234-567-8913",
-              classes: [
-                { id: "16", name: "9A" },
-                { id: "17", name: "9B" },
-                { id: "18", name: "10A" }
-              ]
-            },
-            {
-              id: "T105",
-              user: {
-                id: "105",
-                name: "Ms. Brown",
-                email: "brown@wobulenzihigh.edu"
-              },
-              department: "Mathematics",
-              qualification: "M.Sc. Mathematics",
-              contactNumber: "+1 234-567-8914",
-              classes: [
-                { id: "19", name: "7A" },
-                { id: "20", name: "7B" },
-                { id: "21", name: "8A" },
-                { id: "22", name: "8B" },
-                { id: "23", name: "8C" }
-              ]
-            },
-            {
-              id: "T106",
-              user: {
-                id: "106",
-                name: "Mr. Taylor",
-                email: "taylor@wobulenzihigh.edu"
-              },
-              department: "Physical Education",
-              qualification: "B.Ed. Physical Education",
-              contactNumber: "+1 234-567-8915",
-              classes: [
-                { id: "24", name: "7A" },
-                { id: "25", name: "7B" },
-                { id: "26", name: "8A" },
-                { id: "27", name: "8B" },
-                { id: "28", name: "9A" },
-                { id: "29", name: "9B" },
-                { id: "30", name: "10A" },
-                { id: "31", name: "10B" }
-              ]
-            }
-          ]
-          
-          setTeachers(mockTeachers)
-          setIsLoading(false)
-        }, 1000)
+        const response = await fetch("/api/teachers")
+        const data = await response.json()
+        setTeachers(data)
+        setIsLoading(false)
       } catch (error) {
         console.error("Error fetching teachers:", error)
         toast({
           title: "Error",
           description: "Failed to load teachers data. Please try again.",
-          variant: "destructive"
+          variant: "destructive",
         })
         setIsLoading(false)
       }
@@ -170,61 +54,60 @@ export default function AdminTeachers() {
 
     fetchTeachers()
   }, [toast])
-  
+
   // Filter teachers
-  const filteredTeachers = teachers.filter(teacher => {
-    const matchesDepartment = !filter.department || teacher.department === filter.department
-    const matchesSearch = !filter.search || 
+  const filteredTeachers = teachers.filter((teacher) => {
+    const matchesDepartment = filter.department === "all" || teacher.department === filter.department // Changed condition
+    const matchesSearch =
+      !filter.search ||
       teacher.user.name.toLowerCase().includes(filter.search.toLowerCase()) ||
       teacher.department.toLowerCase().includes(filter.search.toLowerCase()) ||
       teacher.id.toLowerCase().includes(filter.search.toLowerCase())
-    
+
     return matchesDepartment && matchesSearch
   })
-  
+
   // Handle filter change
   const handleFilterChange = (name: string, value: string) => {
-    setFilter(prev => ({ ...prev, [name]: value }))
+    setFilter((prev) => ({ ...prev, [name]: value }))
   }
-  
+
   const handleViewTeacher = (id: string) => {
     router.push(`/dashboard/admin/teachers/${id}`)
   }
-  
+
   const handleEditTeacher = (id: string) => {
     router.push(`/dashboard/admin/teachers/${id}/edit`)
   }
-  
+
   const handleDeleteTeacher = (id: string) => {
     // In a real app, you would call your API to delete the teacher
     toast({
       title: "Teacher Deleted",
-      description: `Teacher ${id} has been deleted successfully.`
+      description: `Teacher ${id} has been deleted successfully.`,
     })
-    
-    setTeachers(prev => prev.filter(teacher => teacher.id !== id))
+
+    setTeachers((prev) => prev.filter((teacher) => teacher.id !== id))
   }
-  
+
   const handleExport = () => {
     toast({
       title: "Export Started",
-      description: "Teacher data is being exported to CSV."
+      description: "Teacher data is being exported to CSV.",
     })
-    
+
     // In a real app, you would implement the export functionality
   }
-  
+
   // Get unique departments for filter
-  const departments = [...new Set(teachers.map(teacher => teacher.department))].sort()
-  
+  const departments = [...new Set(teachers.map((teacher) => teacher.department))].sort()
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Teacher Management</h1>
-          <p className="text-muted-foreground">
-            View and manage all teaching staff
-          </p>
+          <p className="text-muted-foreground">View and manage all teaching staff</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/admin/teachers/new">
@@ -239,7 +122,7 @@ export default function AdminTeachers() {
           </Button>
         </div>
       </div>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Teachers</CardTitle>
@@ -257,17 +140,14 @@ export default function AdminTeachers() {
                   onChange={(e) => handleFilterChange("search", e.target.value)}
                 />
               </div>
-              
-              <Select
-                value={filter.department}
-                onValueChange={(value) => handleFilterChange("department", value)}
-              >
+
+              <Select value={filter.department} onValueChange={(value) => handleFilterChange("department", value)}>
                 <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="All Departments" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Departments</SelectItem>
-                  {departments.map(department => (
+                  <SelectItem value="all">All Departments</SelectItem> {/* Changed from empty string to "all" */}
+                  {departments.map((department) => (
                     <SelectItem key={department} value={department}>
                       {department}
                     </SelectItem>
@@ -275,7 +155,7 @@ export default function AdminTeachers() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {isLoading ? (
               <div className="space-y-4">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -322,14 +202,10 @@ export default function AdminTeachers() {
                         <td className="p-2">{teacher.contactNumber}</td>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleViewTeacher(teacher.id)}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleViewTeacher(teacher.id)}>
                               View
                             </Button>
-                            
+
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm">
@@ -352,7 +228,7 @@ export default function AdminTeachers() {
                                   Email Teacher
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="text-red-600"
                                   onClick={() => handleDeleteTeacher(teacher.id)}
                                 >
@@ -372,7 +248,7 @@ export default function AdminTeachers() {
           </div>
         </CardContent>
       </Card>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -383,7 +259,7 @@ export default function AdminTeachers() {
             <p className="text-xs text-muted-foreground">Across all departments</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">New Hires</CardTitle>
@@ -393,7 +269,7 @@ export default function AdminTeachers() {
             <p className="text-xs text-muted-foreground">In the last 3 months</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Teacher-Student Ratio</CardTitle>
@@ -403,15 +279,15 @@ export default function AdminTeachers() {
             <p className="text-xs text-muted-foreground">Average across school</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Department Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground space-y-1">
-              {departments.map(dept => {
-                const count = teachers.filter(t => t.department === dept).length
+              {departments.map((dept) => {
+                const count = teachers.filter((t) => t.department === dept).length
                 const percentage = Math.round((count / teachers.length) * 100)
                 return (
                   <div key={dept} className="flex justify-between items-center">
@@ -427,3 +303,4 @@ export default function AdminTeachers() {
     </div>
   )
 }
+
