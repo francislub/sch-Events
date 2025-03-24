@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
+import { registerStudent } from "@/app/actions/student-actions"
+import { getParents } from "@/app/actions/parent-actions"
+import { getClasses } from "@/app/actions/class-actions"
 
 export default function AddStudent() {
   const router = useRouter()
@@ -18,35 +22,56 @@ export default function AddStudent() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    admissionNumber: "",
     dateOfBirth: "",
     gender: "",
     enrollmentDate: new Date().toISOString().split("T")[0],
     grade: "",
     section: "",
+    address: "",
     parentId: "",
     classId: "",
+    createAccount: false,
+    email: "",
+    password: "",
+    confirmPassword: "",
   })
 
+  const [errors, setErrors] = useState<Record<string, string[]>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [parents, setParents] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
 
-  // Mock data for parents and classes
-  const parents = [
-    { id: "1", name: "John Doe" },
-    { id: "2", name: "Jane Smith" },
-    { id: "3", name: "Robert Johnson" },
-    { id: "4", name: "Mary Wilson" },
-  ]
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const parentsData = await getParents()
+        const classesData = await getClasses()
 
-  const classes = [
-    { id: "1", name: "10A" },
-    { id: "2", name: "10B" },
-    { id: "3", name: "9A" },
-    { id: "4", name: "9B" },
-  ]
+        setParents(parentsData)
+        setClasses(classesData)
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load required data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchData()
+  }, [toast])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    const { name, value, type, checked } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }))
   }
 
   const handleSelectChange = (name: string, value: string) => {
@@ -56,37 +81,77 @@ export default function AddStudent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setErrors({})
+
+    // Validate password match if creating account
+    if (formData.createAccount && formData.password !== formData.confirmPassword) {
+      setErrors({ confirmPassword: ["Passwords do not match"] })
+      setIsLoading(false)
+      return
+    }
 
     try {
-      // In a real app, you would call your API to add the student
-      // const response = await fetch("/api/students", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json"
-      //   },
-      //   body: JSON.stringify(formData)
-      // })
+      const formDataObj = new FormData()
+      formDataObj.append("firstName", formData.firstName)
+      formDataObj.append("lastName", formData.lastName)
+      formDataObj.append("admissionNumber", formData.admissionNumber)
+      formDataObj.append("dateOfBirth", formData.dateOfBirth)
+      formDataObj.append("gender", formData.gender)
+      formDataObj.append("enrollmentDate", formData.enrollmentDate)
+      formDataObj.append("grade", formData.grade)
+      formDataObj.append("section", formData.section)
+      formDataObj.append("address", formData.address)
+      formDataObj.append("parentId", formData.parentId)
+      formDataObj.append("classId", formData.classId)
+      formDataObj.append("createAccount", formData.createAccount.toString())
 
-      // if (!response.ok) {
-      //   throw new Error("Failed to add student")
-      // }
+      if (formData.createAccount) {
+        formDataObj.append("email", formData.email)
+        formDataObj.append("password", formData.password)
+      }
 
-      toast({
-        title: "Student Added",
-        description: "The student has been added successfully.",
-      })
+      const result = await registerStudent(formDataObj)
 
-      // Redirect to students list
-      router.push("/dashboard/admin/students")
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        router.push("/dashboard/admin/students")
+      } else {
+        setErrors(result.errors || {})
+        if (result.errors?._form) {
+          toast({
+            title: "Error",
+            description: result.errors._form[0],
+            variant: "destructive",
+          })
+        }
+      }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to add student. Please try again.",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       })
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isLoadingData) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Add New Student</h1>
+          <p className="text-muted-foreground">Loading required data...</p>
+        </div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-12 bg-muted rounded"></div>
+          <div className="h-64 bg-muted rounded"></div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -114,6 +179,7 @@ export default function AddStudent() {
                   required
                   disabled={isLoading}
                 />
+                {errors.firstName && <p className="text-sm text-red-500">{errors.firstName[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -126,6 +192,20 @@ export default function AddStudent() {
                   required
                   disabled={isLoading}
                 />
+                {errors.lastName && <p className="text-sm text-red-500">{errors.lastName[0]}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="admissionNumber">Admission Number</Label>
+                <Input
+                  id="admissionNumber"
+                  name="admissionNumber"
+                  value={formData.admissionNumber}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+                {errors.admissionNumber && <p className="text-sm text-red-500">{errors.admissionNumber[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -139,6 +219,7 @@ export default function AddStudent() {
                   required
                   disabled={isLoading}
                 />
+                {errors.dateOfBirth && <p className="text-sm text-red-500">{errors.dateOfBirth[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -152,11 +233,12 @@ export default function AddStudent() {
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.gender && <p className="text-sm text-red-500">{errors.gender[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -170,6 +252,7 @@ export default function AddStudent() {
                   required
                   disabled={isLoading}
                 />
+                {errors.enrollmentDate && <p className="text-sm text-red-500">{errors.enrollmentDate[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -191,6 +274,7 @@ export default function AddStudent() {
                     <SelectItem value="12">Grade 12</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.grade && <p className="text-sm text-red-500">{errors.grade[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -209,10 +293,11 @@ export default function AddStudent() {
                     <SelectItem value="C">Section C</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.section && <p className="text-sm text-red-500">{errors.section[0]}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="parentId">Parent</Label>
+                <Label htmlFor="parentId">Parent/Guardian</Label>
                 <Select
                   value={formData.parentId}
                   onValueChange={(value) => handleSelectChange("parentId", value)}
@@ -224,11 +309,12 @@ export default function AddStudent() {
                   <SelectContent>
                     {parents.map((parent) => (
                       <SelectItem key={parent.id} value={parent.id}>
-                        {parent.name}
+                        {parent.user.name} ({parent.relationship || "Parent"})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.parentId && <p className="text-sm text-red-500">{errors.parentId[0]}</p>}
               </div>
 
               <div className="space-y-2">
@@ -244,12 +330,84 @@ export default function AddStudent() {
                   <SelectContent>
                     {classes.map((cls) => (
                       <SelectItem key={cls.id} value={cls.id}>
-                        {cls.name}
+                        {cls.name} (Grade {cls.grade}, Section {cls.section})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.classId && <p className="text-sm text-red-500">{errors.classId[0]}</p>}
               </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                />
+                {errors.address && <p className="text-sm text-red-500">{errors.address[0]}</p>}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="createAccount"
+                    name="createAccount"
+                    checked={formData.createAccount}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, createAccount: checked === true }))}
+                    disabled={isLoading}
+                  />
+                  <Label htmlFor="createAccount">Create login account for student</Label>
+                </div>
+              </div>
+
+              {formData.createAccount && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required={formData.createAccount}
+                      disabled={isLoading}
+                    />
+                    {errors.email && <p className="text-sm text-red-500">{errors.email[0]}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required={formData.createAccount}
+                      disabled={isLoading}
+                    />
+                    {errors.password && <p className="text-sm text-red-500">{errors.password[0]}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      required={formData.createAccount}
+                      disabled={isLoading}
+                    />
+                    {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword[0]}</p>}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end space-x-4">

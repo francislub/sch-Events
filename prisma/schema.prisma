@@ -14,6 +14,7 @@ enum UserRole {
   ADMIN
   TEACHER
   PARENT
+  STUDENT
 }
 
 model User {
@@ -28,8 +29,9 @@ model User {
   // Relations based on role
   teacherProfile Teacher?
   parentProfile  Parent?
+  studentProfile Student?
   adminProfile   Admin?
-  
+
   // Messages
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
@@ -42,6 +44,7 @@ model Teacher {
   department    String
   qualification String
   contactNumber String?
+  address       String?
   classes       Class[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -53,6 +56,7 @@ model Parent {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   contactNumber String?
   address       String?
+  relationship  String?   // Father, Mother, Guardian, etc.
   children      Student[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -69,22 +73,26 @@ model Admin {
 }
 
 model Student {
-  id            String       @id @default(auto()) @map("_id") @db.ObjectId
-  firstName     String
-  lastName      String
-  dateOfBirth   DateTime
-  gender        String
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String?      @unique @db.ObjectId
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  admissionNumber String      @unique
+  dateOfBirth    DateTime
+  gender         String
   enrollmentDate DateTime
-  grade         String
-  section       String
-  parentId      String       @db.ObjectId
-  parent        Parent       @relation(fields: [parentId], references: [id])
-  classId       String       @db.ObjectId
-  class         Class        @relation(fields: [classId], references: [id])
-  attendances   Attendance[]
-  grades        Grade[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  grade          String
+  section        String
+  address        String?
+  parentId       String       @db.ObjectId
+  parent         Parent       @relation(fields: [parentId], references: [id])
+  classId        String       @db.ObjectId
+  class          Class        @relation(fields: [classId], references: [id])
+  attendances    Attendance[]
+  grades         Grade[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Class {
