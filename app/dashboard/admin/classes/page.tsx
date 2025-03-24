@@ -7,132 +7,59 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Users, BookOpen, ClipboardList } from 'lucide-react'
+import { Plus, Download, Search, MoreHorizontal, FileText, Trash2, Edit, Users } from "lucide-react"
 import Link from "next/link"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { deleteClass, getClasses } from "@/app/actions/class-actions"
+import { getTeachers } from "@/app/actions/teacher-actions"
 
 export default function AdminClasses() {
   const router = useRouter()
   const { toast } = useToast()
-  
+
   const [filter, setFilter] = useState({
-    grade: "all", // Changed from empty string to "all"
-    teacher: "all", // Changed from empty string to "all"
-    search: ""
+    grade: "all",
+    teacherId: "all",
+    search: "",
   })
-  
+
   const [classes, setClasses] = useState<any[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  
+
   // Fetch classes and teachers data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // In a real app, this would be a fetch call to your API
-        // const classesResponse = await fetch('/api/classes')
-        // const classesData = await classesResponse.json()
-        // setClasses(classesData)
-        
-        // const teachersResponse = await fetch('/api/teachers')
-        // const teachersData = await teachersResponse.json()
-        // setTeachers(teachersData)
+        setIsLoading(true)
+        const [classesResult, teachersData] = await Promise.all([getClasses(), getTeachers()])
 
-        // Mock data for demonstration
-        setTimeout(() => {
-          const mockTeachers = [
-            { id: "T101", user: { name: "Ms. Johnson" }, department: "Mathematics" },
-            { id: "T102", user: { name: "Mr. Smith" }, department: "Science" },
-            { id: "T103", user: { name: "Mrs. Davis" }, department: "English" },
-            { id: "T104", user: { name: "Mr. Wilson" }, department: "History" },
-            { id: "T105", user: { name: "Ms. Brown" }, department: "Mathematics" }
-          ]
-          
-          const mockClasses = [
-            {
-              id: "C101",
-              name: "10A",
-              grade: "10",
-              section: "A",
-              teacher: mockTeachers[0],
-              students: Array.from({ length: 32 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            },
-            {
-              id: "C102",
-              name: "10B",
-              grade: "10",
-              section: "B",
-              teacher: mockTeachers[1],
-              students: Array.from({ length: 30 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            },
-            {
-              id: "C103",
-              name: "9A",
-              grade: "9",
-              section: "A",
-              teacher: mockTeachers[2],
-              students: Array.from({ length: 28 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            },
-            {
-              id: "C104",
-              name: "9B",
-              grade: "9",
-              section: "B",
-              teacher: mockTeachers[3],
-              students: Array.from({ length: 27 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            },
-            {
-              id: "C105",
-              name: "11A",
-              grade: "11",
-              section: "A",
-              teacher: mockTeachers[4],
-              students: Array.from({ length: 25 }),
-              subjects: ["Mathematics", "Physics", "Chemistry", "Biology", "English", "History"]
-            },
-            {
-              id: "C106",
-              name: "11B",
-              grade: "11",
-              section: "B",
-              teacher: mockTeachers[0],
-              students: Array.from({ length: 26 }),
-              subjects: ["Mathematics", "Physics", "Chemistry", "Biology", "English", "History"]
-            },
-            {
-              id: "C107",
-              name: "8A",
-              grade: "8",
-              section: "A",
-              teacher: mockTeachers[1],
-              students: Array.from({ length: 35 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            },
-            {
-              id: "C108",
-              name: "8B",
-              grade: "8",
-              section: "B",
-              teacher: mockTeachers[2],
-              students: Array.from({ length: 33 }),
-              subjects: ["Mathematics", "Science", "English", "History", "Geography"]
-            }
-          ]
-          
-          setTeachers(mockTeachers)
-          setClasses(mockClasses)
-          setIsLoading(false)
-        }, 1000)
+        if (classesResult.success) {
+          setClasses(classesResult.data || [])
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to load classes data. Please try again.",
+            variant: "destructive",
+          })
+        }
+
+        setTeachers(teachersData || [])
+        setIsLoading(false)
       } catch (error) {
         console.error("Error fetching data:", error)
         toast({
           title: "Error",
-          description: "Failed to load classes data. Please try again.",
-          variant: "destructive"
+          description: "Failed to load data. Please try again.",
+          variant: "destructive",
         })
         setIsLoading(false)
       }
@@ -140,35 +67,100 @@ export default function AdminClasses() {
 
     fetchData()
   }, [toast])
-  
+
   // Filter classes
-  const filteredClasses = classes.filter(cls => {
+  const filteredClasses = classes.filter((cls) => {
     const matchesGrade = filter.grade === "all" || cls.grade === filter.grade
-    const matchesTeacher = filter.teacher === "all" || cls.teacher.id === filter.teacher
-    const matchesSearch = !filter.search || 
+    const matchesTeacher = filter.teacherId === "all" || cls.teacherId === filter.teacherId
+    const matchesSearch =
+      !filter.search ||
       cls.name.toLowerCase().includes(filter.search.toLowerCase()) ||
-      cls.grade.toLowerCase().includes(filter.search.toLowerCase()) ||
       cls.section.toLowerCase().includes(filter.search.toLowerCase())
-    
+
     return matchesGrade && matchesTeacher && matchesSearch
   })
-  
+
   // Handle filter change
   const handleFilterChange = (name: string, value: string) => {
-    setFilter(prev => ({ ...prev, [name]: value }))
+    setFilter((prev) => ({ ...prev, [name]: value }))
   }
-  
+
+  const handleViewClass = (id: string) => {
+    router.push(`/dashboard/admin/classes/${id}`)
+  }
+
+  const handleEditClass = (id: string) => {
+    router.push(`/dashboard/admin/classes/${id}/edit`)
+  }
+
+  const handleDeleteClass = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this class? This action cannot be undone.")) {
+      try {
+        const result = await deleteClass(id)
+
+        if (result.success) {
+          toast({
+            title: "Class Deleted",
+            description: "Class has been deleted successfully.",
+          })
+
+          // Update the classes list
+          setClasses((prev) => prev.filter((cls) => cls.id !== id))
+        } else {
+          toast({
+            title: "Error",
+            description: result.error || "Failed to delete class. Please try again.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleExport = () => {
+    // Generate CSV data
+    const headers = ["ID", "Name", "Grade", "Section", "Teacher", "Students"]
+    const csvData = [
+      headers.join(","),
+      ...filteredClasses.map((cls) =>
+        [cls.id, cls.name, cls.grade, cls.section, cls.teacher?.user?.name || "N/A", cls.students?.length || 0].join(
+          ",",
+        ),
+      ),
+    ].join("\n")
+
+    // Create a blob and download
+    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", "classes.csv")
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast({
+      title: "Export Complete",
+      description: "Classes data has been exported to CSV.",
+    })
+  }
+
   // Get unique grades for filter
-  const grades = [...new Set(classes.map(cls => cls.grade))].sort()
-  
+  const grades = [...new Set(classes.map((cls) => cls.grade))].sort()
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Class Management</h1>
-          <p className="text-muted-foreground">
-            View and manage all classes
-          </p>
+          <p className="text-muted-foreground">View and manage all classes</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/admin/classes/new">
@@ -177,9 +169,13 @@ export default function AdminClasses() {
               Add New Class
             </Button>
           </Link>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
         </div>
       </div>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Classes</CardTitle>
@@ -191,67 +187,55 @@ export default function AdminClasses() {
               <div className="relative flex-grow">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search classes..."
+                  placeholder="Search classes by name or section..."
                   className="pl-8"
                   value={filter.search}
                   onChange={(e) => handleFilterChange("search", e.target.value)}
                 />
               </div>
-              
-              <Select
-                value={filter.grade}
-                onValueChange={(value) => handleFilterChange("grade", value)}
-              >
-                <SelectTrigger className="w-full md:w-[150px]">
+
+              <Select value={filter.grade} onValueChange={(value) => handleFilterChange("grade", value)}>
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue placeholder="All Grades" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Grades</SelectItem>
-                  {grades.map(grade => (
+                  {grades.map((grade) => (
                     <SelectItem key={grade} value={grade}>
                       Grade {grade}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              
-              <Select
-                value={filter.teacher}
-                onValueChange={(value) => handleFilterChange("teacher", value)}
-              >
+
+              <Select value={filter.teacherId} onValueChange={(value) => handleFilterChange("teacherId", value)}>
                 <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="All Teachers" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Teachers</SelectItem>
-                  {teachers.map(teacher => (
+                  {teachers.map((teacher) => (
                     <SelectItem key={teacher.id} value={teacher.id}>
-                      {teacher.user.name}
+                      {teacher.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
+
             {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <CardHeader className="pb-2">
-                      <div className="h-5 w-16 bg-muted rounded mb-2"></div>
-                      <div className="h-4 w-32 bg-muted rounded"></div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="h-4 w-full bg-muted rounded"></div>
-                        <div className="h-4 w-3/4 bg-muted rounded"></div>
-                        <div className="flex justify-between">
-                          <div className="h-8 w-20 bg-muted rounded"></div>
-                          <div className="h-8 w-20 bg-muted rounded"></div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+              <div className="space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="animate-pulse flex items-center border-b pb-4">
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-muted rounded w-1/3"></div>
+                      <div className="h-3 bg-muted rounded w-1/4"></div>
+                    </div>
+                    <div className="space-x-2">
+                      <div className="h-8 w-16 bg-muted rounded inline-block"></div>
+                      <div className="h-8 w-16 bg-muted rounded inline-block"></div>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : filteredClasses.length === 0 ? (
@@ -259,73 +243,79 @@ export default function AdminClasses() {
                 No classes found matching the selected filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredClasses.map((cls) => (
-                  <Card key={cls.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle>Class {cls.name}</CardTitle>
-                          <CardDescription>
-                            Grade {cls.grade}, Section {cls.section}
-                          </CardDescription>
-                        </div>
-                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                          {cls.students.length} students
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-sm font-medium">Class Teacher</p>
-                          <p className="text-sm">
-                            {cls.teacher.user.name} - {cls.teacher.department}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <p className="text-sm font-medium">Subjects</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {cls.subjects.map((subject: string, i: number) => (
-                              <Badge key={i} variant="outline" className="text-xs">
-                                {subject}
-                              </Badge>
-                            ))}
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-muted">
+                      <th className="p-2 text-left font-medium">Name</th>
+                      <th className="p-2 text-left font-medium">Grade</th>
+                      <th className="p-2 text-left font-medium">Section</th>
+                      <th className="p-2 text-left font-medium">Teacher</th>
+                      <th className="p-2 text-left font-medium">Students</th>
+                      <th className="p-2 text-left font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClasses.map((cls) => (
+                      <tr key={cls.id} className="border-t">
+                        <td className="p-2 font-medium">{cls.name}</td>
+                        <td className="p-2">Grade {cls.grade}</td>
+                        <td className="p-2">Section {cls.section}</td>
+                        <td className="p-2">{cls.teacher?.user?.name || "Not assigned"}</td>
+                        <td className="p-2">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                            {cls.students?.length || 0} students
+                          </Badge>
+                        </td>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleViewClass(cls.id)}>
+                              View
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleViewClass(cls.id)}>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditClass(cls.id)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Class
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => router.push(`/dashboard/admin/classes/${cls.id}/students`)}
+                                >
+                                  <Users className="mr-2 h-4 w-4" />
+                                  View Students
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClass(cls.id)}>
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete Class
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                        </div>
-                        
-                        <div className="flex justify-between">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex gap-1"
-                            onClick={() => router.push(`/dashboard/admin/classes/${cls.id}/students`)}
-                          >
-                            <Users className="h-4 w-4" />
-                            Students
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex gap-1"
-                            onClick={() => router.push(`/dashboard/admin/classes/${cls.id}/schedule`)}
-                          >
-                            <ClipboardList className="h-4 w-4" />
-                            Schedule
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
@@ -335,45 +325,34 @@ export default function AdminClasses() {
             <p className="text-xs text-muted-foreground">Across all grades</p>
           </CardContent>
         </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {classes.reduce((total, cls) => total + cls.students.length, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">Across all classes</p>
-          </CardContent>
-        </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Average Class Size</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {classes.length > 0 
-                ? Math.round(classes.reduce((total, cls) => total + cls.students.length, 0) / classes.length) 
+              {classes.length > 0
+                ? Math.round(classes.reduce((total, cls) => total + (cls.students?.length || 0), 0) / classes.length)
                 : 0}
             </div>
             <p className="text-xs text-muted-foreground">Students per class</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Grade Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground space-y-1">
-              {grades.map(grade => {
-                const count = classes.filter(cls => cls.grade === grade).length
+              {grades.map((grade) => {
+                const count = classes.filter((cls) => cls.grade === grade).length
+                const percentage = Math.round((count / classes.length) * 100) || 0
                 return (
                   <div key={grade} className="flex justify-between items-center">
                     <span>Grade {grade}</span>
-                    <span>{count} classes</span>
+                    <span>{percentage}%</span>
                   </div>
                 )
               })}
@@ -384,3 +363,4 @@ export default function AdminClasses() {
     </div>
   )
 }
+

@@ -37,6 +37,8 @@ export async function middleware(request: NextRequest) {
             ? "TEACHER"
             : roleFromPath === "parent"
               ? "PARENT"
+            : roleFromPath === "student"
+              ? "STUDENT"
               : ""
 
       if (normalizedRoleFromPath && normalizedRoleFromPath !== userRole) {

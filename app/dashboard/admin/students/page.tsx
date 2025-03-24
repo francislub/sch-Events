@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
-import { Download, Search, MoreHorizontal, FileText, Trash2, Edit, UserPlus } from "lucide-react"
+import { Plus, Download, Search, MoreHorizontal, FileText, Trash2, Edit, Mail, GraduationCap } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -17,117 +17,73 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { getStudents } from "@/app/actions/student-actions"
+import { getClasses } from "@/app/actions/class-actions"
 
 export default function AdminStudents() {
   const router = useRouter()
   const { toast } = useToast()
 
   const [filter, setFilter] = useState({
-    grade: "",
-    section: "",
+    classId: "all",
+    grade: "all",
     search: "",
   })
 
   const [students, setStudents] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const studentsPerPage = 10
 
-  // Fetch students data
+  // Fetch students and classes data
   useEffect(() => {
-    const fetchStudents = async () => {
+    const fetchData = async () => {
       try {
-        // In a real app, this would be a fetch call to your API
-        // const response = await fetch('/api/students')
-        // const data = await response.json()
-        // setStudents(data)
+        setIsLoading(true)
+        const [studentsData, classesResult] = await Promise.all([getStudents(), getClasses()])
 
-        // Mock data for demonstration
-        setTimeout(() => {
-          const mockStudents = Array.from({ length: 25 }).map((_, index) => ({
-            id: `S100${index + 1}`,
-            firstName: [
-              "Sarah",
-              "Michael",
-              "Emily",
-              "David",
-              "Jessica",
-              "Daniel",
-              "Sophia",
-              "Matthew",
-              "Olivia",
-              "Jacob",
-            ][index % 10],
-            lastName: [
-              "Doe",
-              "Smith",
-              "Johnson",
-              "Wilson",
-              "Brown",
-              "Taylor",
-              "Anderson",
-              "Thomas",
-              "Jackson",
-              "White",
-            ][index % 10],
-            grade: ["7", "8", "9", "10", "11", "12"][Math.floor(index / 5) % 6],
-            section: ["A", "B", "C"][index % 3],
-            dateOfBirth: "2010-05-15",
-            gender: index % 2 === 0 ? "Female" : "Male",
-            enrollmentDate: "2023-01-10",
-            parent: {
-              id: `P100${Math.floor(index / 2) + 1}`,
-              user: {
-                name: ["John Doe", "Jane Smith", "Robert Johnson", "Mary Wilson", "William Brown"][
-                  Math.floor(index / 5) % 5
-                ],
-              },
-              contactNumber: `+1 234-567-${8900 + index}`,
-            },
-            class: {
-              id: `C100${Math.floor(index / 5) + 1}`,
-              name: `${["7", "8", "9", "10", "11", "12"][Math.floor(index / 5) % 6]}${["A", "B", "C"][index % 3]}`,
-            },
-          }))
+        setStudents(studentsData || [])
 
-          setStudents(mockStudents)
-          setTotalPages(Math.ceil(mockStudents.length / studentsPerPage))
-          setIsLoading(false)
-        }, 1000)
+        if (classesResult.success) {
+          setClasses(classesResult.data || [])
+        }
+
+        setIsLoading(false)
       } catch (error) {
-        console.error("Error fetching students:", error)
+        console.error("Error fetching data:", error)
         toast({
           title: "Error",
-          description: "Failed to load students data. Please try again.",
+          description: "Failed to load data. Please try again.",
           variant: "destructive",
         })
         setIsLoading(false)
       }
     }
 
-    fetchStudents()
+    fetchData()
   }, [toast])
 
-  // Filter and paginate students
+  // Filter students
   const filteredStudents = students.filter((student) => {
-    const matchesGrade = filter.grade === "all" || !filter.grade || student.grade === filter.grade
-    const matchesSection = filter.section === "all" || !filter.section || student.section === filter.section
+    const studentData = student.student
+    if (!studentData) return false
+
+    const matchesClass = filter.classId === "all" || studentData.classId === filter.classId
+    const matchesGrade = filter.grade === "all" || studentData.class?.grade === filter.grade
+
+    const searchTerm = filter.search.toLowerCase()
     const matchesSearch =
-      !filter.search ||
-      student.firstName.toLowerCase().includes(filter.search.toLowerCase()) ||
-      student.lastName.toLowerCase().includes(filter.search.toLowerCase()) ||
-      student.id.toLowerCase().includes(filter.search.toLowerCase())
+      !searchTerm ||
+      student.name.toLowerCase().includes(searchTerm) ||
+      studentData.admissionNumber?.toLowerCase().includes(searchTerm) ||
+      student.email.toLowerCase().includes(searchTerm)
 
-    return matchesGrade && matchesSection && matchesSearch
+    return matchesClass && matchesGrade && matchesSearch
   })
-
-  const paginatedStudents = filteredStudents.slice((currentPage - 1) * studentsPerPage, currentPage * studentsPerPage)
 
   // Handle filter change
   const handleFilterChange = (name: string, value: string) => {
     setFilter((prev) => ({ ...prev, [name]: value }))
-    setCurrentPage(1) // Reset to first page when filter changes
   }
 
   const handleViewStudent = (id: string) => {
@@ -138,24 +94,68 @@ export default function AdminStudents() {
     router.push(`/dashboard/admin/students/${id}/edit`)
   }
 
-  const handleDeleteStudent = (id: string) => {
-    // In a real app, you would call your API to delete the student
-    toast({
-      title: "Student Deleted",
-      description: `Student ${id} has been deleted successfully.`,
-    })
+  const handleViewAcademics = (id: string) => {
+    router.push(`/dashboard/admin/students/${id}/academics`)
+  }
 
-    setStudents((prev) => prev.filter((student) => student.id !== id))
+  const handleDeleteStudent = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this student? This action cannot be undone.")) {
+      try {
+        // In a real app, you would call your API to delete the student
+        toast({
+          title: "Student Deleted",
+          description: "Student has been deleted successfully.",
+        })
+
+        // Update the students list
+        setStudents((prev) => prev.filter((student) => student.id !== id))
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   const handleExport = () => {
-    toast({
-      title: "Export Started",
-      description: "Student data is being exported to CSV.",
-    })
+    // Generate CSV data
+    const headers = ["ID", "Name", "Admission Number", "Class", "Grade", "Parent", "Email"]
+    const csvData = [
+      headers.join(","),
+      ...filteredStudents.map((student) =>
+        [
+          student.id,
+          student.name,
+          student.student?.admissionNumber || "N/A",
+          student.student?.class?.name || "N/A",
+          student.student?.class?.grade || "N/A",
+          student.student?.parent?.user?.name || "N/A",
+          student.email,
+        ].join(","),
+      ),
+    ].join("\n")
 
-    // In a real app, you would implement the export functionality
+    // Create a blob and download
+    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", "students.csv")
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast({
+      title: "Export Complete",
+      description: "Students data has been exported to CSV.",
+    })
   }
+
+  // Get unique grades for filter
+  const grades = [...new Set(classes.map((cls) => cls.grade))].sort()
 
   return (
     <div className="space-y-6">
@@ -167,7 +167,7 @@ export default function AdminStudents() {
         <div className="flex items-center gap-2">
           <Link href="/dashboard/admin/students/new">
             <Button>
-              <UserPlus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4" />
               Add New Student
             </Button>
           </Link>
@@ -189,7 +189,7 @@ export default function AdminStudents() {
               <div className="relative flex-grow">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search students by name or ID..."
+                  placeholder="Search students by name, admission number or email..."
                   className="pl-8"
                   value={filter.search}
                   onChange={(e) => handleFilterChange("search", e.target.value)}
@@ -197,29 +197,30 @@ export default function AdminStudents() {
               </div>
 
               <Select value={filter.grade} onValueChange={(value) => handleFilterChange("grade", value)}>
-                <SelectTrigger className="w-full md:w-[150px]">
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue placeholder="All Grades" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Grades</SelectItem>
-                  <SelectItem value="7">Grade 7</SelectItem>
-                  <SelectItem value="8">Grade 8</SelectItem>
-                  <SelectItem value="9">Grade 9</SelectItem>
-                  <SelectItem value="10">Grade 10</SelectItem>
-                  <SelectItem value="11">Grade 11</SelectItem>
-                  <SelectItem value="12">Grade 12</SelectItem>
+                  {grades.map((grade) => (
+                    <SelectItem key={grade} value={grade}>
+                      Grade {grade}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
-              <Select value={filter.section} onValueChange={(value) => handleFilterChange("section", value)}>
-                <SelectTrigger className="w-full md:w-[150px]">
-                  <SelectValue placeholder="All Sections" />
+              <Select value={filter.classId} onValueChange={(value) => handleFilterChange("classId", value)}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <SelectValue placeholder="All Classes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Sections</SelectItem>
-                  <SelectItem value="A">Section A</SelectItem>
-                  <SelectItem value="B">Section B</SelectItem>
-                  <SelectItem value="C">Section C</SelectItem>
+                  <SelectItem value="all">All Classes</SelectItem>
+                  {classes.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -244,144 +245,131 @@ export default function AdminStudents() {
                 No students found matching the selected filters.
               </div>
             ) : (
-              <>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted">
-                        <th className="p-2 text-left font-medium">ID</th>
-                        <th className="p-2 text-left font-medium">Name</th>
-                        <th className="p-2 text-left font-medium">Grade</th>
-                        <th className="p-2 text-left font-medium">Parent</th>
-                        <th className="p-2 text-left font-medium">Contact</th>
-                        <th className="p-2 text-left font-medium">Actions</th>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-muted">
+                      <th className="p-2 text-left font-medium">Name</th>
+                      <th className="p-2 text-left font-medium">Admission No.</th>
+                      <th className="p-2 text-left font-medium">Class</th>
+                      <th className="p-2 text-left font-medium">Parent</th>
+                      <th className="p-2 text-left font-medium">Email</th>
+                      <th className="p-2 text-left font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((student) => (
+                      <tr key={student.id} className="border-t">
+                        <td className="p-2 font-medium">{student.name}</td>
+                        <td className="p-2">{student.student?.admissionNumber || "N/A"}</td>
+                        <td className="p-2">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                            {student.student?.class?.name || "N/A"}
+                          </Badge>
+                        </td>
+                        <td className="p-2">{student.student?.parent?.user?.name || "N/A"}</td>
+                        <td className="p-2">{student.email}</td>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleViewStudent(student.id)}>
+                              View
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleViewStudent(student.id)}>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditStudent(student.id)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Student
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewAcademics(student.id)}>
+                                  <GraduationCap className="mr-2 h-4 w-4" />
+                                  View Academics
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`mailto:${student.email}`)}>
+                                  <Mail className="mr-2 h-4 w-4" />
+                                  Email Student
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteStudent(student.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete Student
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedStudents.map((student) => (
-                        <tr key={student.id} className="border-t">
-                          <td className="p-2 font-medium">{student.id}</td>
-                          <td className="p-2">
-                            {student.firstName} {student.lastName}
-                          </td>
-                          <td className="p-2">
-                            {student.grade}
-                            {student.section}
-                          </td>
-                          <td className="p-2">{student.parent.user.name}</td>
-                          <td className="p-2">{student.parent.contactNumber}</td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleViewStudent(student.id)}>
-                                View
-                              </Button>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleViewStudent(student.id)}>
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleEditStudent(student.id)}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit Student
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-red-600"
-                                    onClick={() => handleDeleteStudent(student.id)}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Student
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-between items-center mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {paginatedStudents.length} of {filteredStudents.length} students
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                      disabled={currentPage <= 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) =>
-                          Math.min(prev + 1, Math.ceil(filteredStudents.length / studentsPerPage)),
-                        )
-                      }
-                      disabled={currentPage >= Math.ceil(filteredStudents.length / studentsPerPage)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{students.length}</div>
-            <p className="text-xs text-muted-foreground">Across all grades</p>
+            <p className="text-xs text-muted-foreground">Enrolled in the school</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">New Enrollments</CardTitle>
+            <CardTitle className="text-sm font-medium">Grade Distribution</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">In the last 30 days</p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              {grades.map((grade) => {
+                const count = students.filter((student) => student.student?.class?.grade === grade).length
+                const percentage = Math.round((count / students.length) * 100) || 0
+                return (
+                  <div key={grade} className="flex justify-between items-center">
+                    <span>Grade {grade}</span>
+                    <span>{percentage}%</span>
+                  </div>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Gender Distribution</CardTitle>
+            <CardTitle className="text-sm font-medium">Gender Ratio</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">52% / 48%</div>
-            <p className="text-xs text-muted-foreground">Female / Male students</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Average Attendance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">94.2%</div>
-            <p className="text-xs text-muted-foreground">Across all students</p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              {["Male", "Female", "Other"].map((gender) => {
+                const count = students.filter((student) => student.student?.gender === gender).length
+                const percentage = Math.round((count / students.length) * 100) || 0
+                return (
+                  <div key={gender} className="flex justify-between items-center">
+                    <span>{gender}</span>
+                    <span>{percentage}%</span>
+                  </div>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>

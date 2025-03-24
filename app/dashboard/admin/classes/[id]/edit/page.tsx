@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { addClass } from "@/app/actions/class-actions"
+import { getClassById, updateClass } from "@/app/actions/class-actions"
 import { getTeachers } from "@/app/actions/teacher-actions"
+import { ArrowLeft } from "lucide-react"
 
-export default function AddClass() {
+export default function EditClassPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { toast } = useToast()
 
@@ -26,33 +27,51 @@ export default function AddClass() {
 
   const [teachers, setTeachers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingTeachers, setIsLoadingTeachers] = useState(true)
+  const [isLoadingData, setIsLoadingData] = useState(true)
   const [errors, setErrors] = useState<Record<string, string[]>>({})
 
   // Available grades and sections
   const grades = ["7", "8", "9", "10", "11", "12"]
   const sections = ["A", "B", "C", "D"]
 
-  // Fetch teachers from database
+  // Fetch class and teachers data
   useEffect(() => {
-    const fetchTeachers = async () => {
+    const fetchData = async () => {
       try {
-        const teachersData = await getTeachers()
+        const [classResult, teachersData] = await Promise.all([getClassById(params.id), getTeachers()])
+
+        if (classResult.success) {
+          const classData = classResult.data
+          setFormData({
+            name: classData.name,
+            grade: classData.grade,
+            section: classData.section,
+            teacherId: classData.teacherId,
+          })
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to load class data. Please try again.",
+            variant: "destructive",
+          })
+          router.push("/dashboard/admin/classes")
+        }
+
         setTeachers(teachersData || [])
       } catch (error) {
-        console.error("Error fetching teachers:", error)
+        console.error("Error fetching data:", error)
         toast({
           title: "Error",
-          description: "Failed to load teachers. Please try again.",
+          description: "Failed to load data. Please try again.",
           variant: "destructive",
         })
       } finally {
-        setIsLoadingTeachers(false)
+        setIsLoadingData(false)
       }
     }
 
-    fetchTeachers()
-  }, [toast])
+    fetchData()
+  }, [params.id, router, toast])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -63,7 +82,7 @@ export default function AddClass() {
     setFormData((prev) => ({ ...prev, [name]: value }))
 
     // Auto-generate class name when grade and section are selected
-    if (name === "grade" || name === "section") {
+    if ((name === "grade" || name === "section") && !formData.name.includes(value)) {
       const updatedData = { ...formData, [name]: value }
       if (updatedData.grade && updatedData.section) {
         setFormData((prev) => ({ ...prev, [name]: value, name: `${updatedData.grade}${updatedData.section}` }))
@@ -83,23 +102,23 @@ export default function AddClass() {
     formDataObj.append("teacherId", formData.teacherId)
 
     try {
-      const result = await addClass(formDataObj)
+      const result = await updateClass(params.id, formDataObj)
 
       if (!result.success) {
         setErrors(result.errors || {})
         toast({
           title: "Error",
-          description: "Failed to add class. Please check the form for errors.",
+          description: "Failed to update class. Please check the form for errors.",
           variant: "destructive",
         })
       } else {
         toast({
           title: "Success",
-          description: "Class added successfully.",
+          description: "Class updated successfully.",
         })
 
-        // Redirect to classes list
-        router.push("/dashboard/admin/classes")
+        // Redirect to class details
+        router.push(`/dashboard/admin/classes/${params.id}`)
       }
     } catch (error) {
       toast({
@@ -112,17 +131,33 @@ export default function AddClass() {
     }
   }
 
+  if (isLoadingData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-lg">Loading class data...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Add New Class</h1>
-        <p className="text-muted-foreground">Create a new class and assign a teacher</p>
+      <div className="flex items-center">
+        <Button variant="outline" onClick={() => router.back()} className="mr-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Edit Class</h1>
+          <p className="text-muted-foreground">Update class information</p>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Class Information</CardTitle>
-          <CardDescription>Fill in the details for the new class</CardDescription>
+          <CardDescription>Update the details for this class</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -187,10 +222,10 @@ export default function AddClass() {
                 <Select
                   value={formData.teacherId}
                   onValueChange={(value) => handleSelectChange("teacherId", value)}
-                  disabled={isLoading || isLoadingTeachers}
+                  disabled={isLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={isLoadingTeachers ? "Loading teachers..." : "Select teacher"} />
+                    <SelectValue placeholder="Select teacher" />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.map((teacher) => (
@@ -210,13 +245,13 @@ export default function AddClass() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push("/dashboard/admin/classes")}
+                onClick={() => router.push(`/dashboard/admin/classes/${params.id}`)}
                 disabled={isLoading}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Adding..." : "Add Class"}
+                {isLoading ? "Updating..." : "Update Class"}
               </Button>
             </div>
           </form>
