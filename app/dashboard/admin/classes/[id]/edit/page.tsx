@@ -230,7 +230,7 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
                   <SelectContent>
                     {teachers.map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name} - {teacher.teacher?.specialization || "Teacher"}
+                        {teacher.name} - {teacher.user?.name || "Teacher"}
                       </SelectItem>
                     ))}
                   </SelectContent>
