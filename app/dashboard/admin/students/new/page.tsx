@@ -29,60 +29,68 @@ export default function NewStudentPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        // Fetch parents
-        const parentsData = await getParents()
-        setParents(parentsData || [])
-
-        // Fetch classes
-        const classesResult = await getClasses()
+        const parentsData = await getParents();
+        setParents(parentsData || []);
+  
+        const classesResult = await getClasses();
         if (classesResult.success) {
-          setClasses(classesResult.data || [])
+          setClasses(classesResult.data || []);
         }
       } catch (error) {
-        console.error("Error loading data:", error)
+        console.error("Error loading data:", error);
         toast({
           title: "Error",
           description: "Failed to load data. Please refresh the page.",
           variant: "destructive",
-        })
+        });
       } finally {
-        setIsLoadingData(false)
+        setIsLoadingData(false);
       }
     }
+  
+    loadData();
+  }, [toast]);
+  
+  useEffect(() => {
+    console.log("Fetched Parents:", parents);
+    console.log("Fetched Classes:", classes);
+  }, [parents, classes]);
+  
 
-    loadData()
-  }, [toast])
-
-  async function handleSubmit(formData: FormData) {
-    setIsLoading(true)
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+  
     try {
-      const result = await registerStudent(formData)
-
+      const formData = new FormData(event.currentTarget);
+      const result = await registerStudent(formData);
+  
       if (result.error) {
         toast({
           title: "Error",
           description: result.error,
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
-
+  
       toast({
         title: "Success",
         description: "Student registered successfully",
-      })
-
-      router.push("/dashboard/admin/students")
+      });
+  
+      router.push("/dashboard/admin/students");
     } catch (error) {
       toast({
         title: "Error",
         description: "Something went wrong. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
+  
 
   if (isLoadingData) {
     return (
@@ -103,7 +111,7 @@ export default function NewStudentPage() {
           <CardTitle>Student Information</CardTitle>
           <CardDescription>Enter the details of the new student</CardDescription>
         </CardHeader>
-        <form action={handleSubmit}>
+        <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -174,8 +182,8 @@ export default function NewStudentPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {parents.map((parent) => (
-                      <SelectItem key={parent.id} value={parent.parent?.id}>
-                        {parent.name} ({parent.parent?.relationship || "Parent"})
+                      <SelectItem key={parent.id} value={parent?.id}>
+                        {parent.name} {parent.user?.name || "Parent"}
                       </SelectItem>
                     ))}
                   </SelectContent>

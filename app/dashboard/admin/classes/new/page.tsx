@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { addClass } from "@/app/actions/class-actions"
+import { addClass } from "@/app/actions/class"
 import { getTeachers } from "@/app/actions/teacher-actions"
 
 export default function AddClass() {
@@ -36,23 +36,30 @@ export default function AddClass() {
   // Fetch teachers from database
   useEffect(() => {
     const fetchTeachers = async () => {
+      setIsLoadingTeachers(true);
       try {
-        const teachersData = await getTeachers()
-        setTeachers(teachersData || [])
+        const teachersData = await getTeachers();
+        console.log("Fetched teachers:", teachersData); // Debugging
+        if (teachersData && Array.isArray(teachersData)) {
+          setTeachers(teachersData);
+        } else {
+          setTeachers([]); // Ensure it's an array
+        }
       } catch (error) {
-        console.error("Error fetching teachers:", error)
+        console.error("Error fetching teachers:", error);
         toast({
           title: "Error",
           description: "Failed to load teachers. Please try again.",
           variant: "destructive",
-        })
+        });
       } finally {
-        setIsLoadingTeachers(false)
+        setIsLoadingTeachers(false);
       }
-    }
-
-    fetchTeachers()
-  }, [toast])
+    };
+  
+    fetchTeachers();
+  }, [toast]);
+  
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -195,7 +202,7 @@ export default function AddClass() {
                   <SelectContent>
                     {teachers.map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name} - {teacher.teacher?.specialization || "Teacher"}
+                        {teacher.name} - {teacher.user?.name || "Teacher"}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,468 +1,226 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
-import { db } from "@/lib/db"
 import { hash } from "bcrypt"
+import { db } from "@/lib/db"
+import { z } from "zod"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { revalidatePath } from "next/cache"
+
+// Define validation schema
+const studentSchema = z.object({
+  firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
+  lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
+  admissionNumber: z.string().min(1, { message: "Admission number is required" }),
+  dateOfBirth: z.string().min(1, { message: "Date of birth is required" }),
+  gender: z.string().min(1, { message: "Gender is required" }),
+  enrollmentDate: z.string().min(1, { message: "Enrollment date is required" }),
+  grade: z.string().min(1, { message: "Grade is required" }),
+  section: z.string().min(1, { message: "Section is required" }),
+  address: z.string().optional(),
+  parentId: z.string().min(1, { message: "Parent is required" }),
+  classId: z.string().min(1, { message: "Class is required" }),
+  createAccount: z.boolean().optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
+})
 
 export async function registerStudent(formData: FormData) {
+  // Check authentication
+  const session = await getServerSession(authOptions)
+
+  if (!session || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      errors: {
+        _form: ["You are not authorized to perform this action"],
+      },
+    }
+  }
+
+  // Extract and validate form data
+  const createAccount = formData.get("createAccount") === "true"
+
+  const rawData = {
+    firstName: formData.get("firstName") as string,
+    lastName: formData.get("lastName") as string,
+    admissionNumber: formData.get("admissionNumber") as string,
+    dateOfBirth: formData.get("dateOfBirth") as string,
+    gender: formData.get("gender") as string,
+    enrollmentDate: formData.get("enrollmentDate") as string,
+    grade: formData.get("grade") as string,
+    section: formData.get("section") as string,
+    address: formData.get("address") as string,
+    parentId: formData.get("parentId") as string,
+    classId: formData.get("classId") as string,
+    createAccount,
+    email: createAccount ? (formData.get("email") as string) : undefined,
+    password: createAccount ? (formData.get("password") as string) : undefined,
+  }
+
+  // Validate data
+  const validationResult = studentSchema.safeParse(rawData)
+
+  if (!validationResult.success) {
+    return {
+      success: false,
+      errors: validationResult.error.flatten().fieldErrors,
+    }
+  }
+
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return {
-        error: "You must be logged in to register a student",
-      }
-    }
-
-    // Only admin can register students
-    if (session.user.role !== "ADMIN") {
-      return {
-        error: "You do not have permission to register students",
-      }
-    }
-
-    const fullName = formData.get("fullName") as string
-    const dateOfBirth = formData.get("dateOfBirth") as string
-    const gender = formData.get("gender") as string
-    const admissionNumber = formData.get("admissionNumber") as string
-    const classId = formData.get("classId") as string
-    const stream = formData.get("stream") as string
-    const parentId = formData.get("parentId") as string
-    const address = formData.get("address") as string
-    const email = formData.get("email") as string
-    const password = formData.get("password") as string
-
-    if (
-      !fullName ||
-      !dateOfBirth ||
-      !gender ||
-      !admissionNumber ||
-      !classId ||
-      !parentId ||
-      !address ||
-      !email ||
-      !password
-    ) {
-      return {
-        error: "All fields are required",
-      }
-    }
-
     // Check if student with admission number already exists
     const existingStudent = await db.student.findUnique({
       where: {
-        admissionNumber,
+        admissionNumber: rawData.admissionNumber,
       },
     })
 
     if (existingStudent) {
       return {
-        error: "Student with this admission number already exists",
-      }
-    }
-
-    // Check if email already exists
-    const existingUser = await db.user.findUnique({
-      where: {
-        email,
-      },
-    })
-
-    if (existingUser) {
-      return {
-        error: "User with this email already exists",
-      }
-    }
-
-    // Split full name into first and last name
-    const nameParts = fullName.trim().split(" ")
-    const firstName = nameParts[0]
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""
-
-    // Hash the password
-    const hashedPassword = await hash(password, 10)
-
-    // Create the student user
-    const student = await db.user.create({
-      data: {
-        name: fullName,
-        email,
-        password: hashedPassword,
-        role: "STUDENT",
-        student: {
-          create: {
-            firstName,
-            lastName,
-            admissionNumber,
-            dateOfBirth: new Date(dateOfBirth),
-            gender,
-            enrollmentDate: new Date(),
-            stream,
-            address,
-            classId,
-            parentId,
-          },
+        success: false,
+        errors: {
+          admissionNumber: ["Student with this admission number already exists"],
         },
-      },
-      include: {
-        student: true,
-      },
-    })
+      }
+    }
+
+    // Create student with or without user account
+    if (createAccount && rawData.email && rawData.password) {
+      // Check if user with email already exists
+      const existingUser = await db.user.findUnique({
+        where: {
+          email: rawData.email,
+        },
+      })
+
+      if (existingUser) {
+        return {
+          success: false,
+          errors: {
+            email: ["User with this email already exists"],
+          },
+        }
+      }
+
+      // Hash password
+      const hashedPassword = await hash(rawData.password, 10)
+
+      // Create user
+      const user = await db.user.create({
+        data: {
+          name: `${rawData.firstName} ${rawData.lastName}`,
+          email: rawData.email,
+          password: hashedPassword,
+          role: "STUDENT",
+        },
+      })
+
+      // Create student with user account
+      await db.student.create({
+        data: {
+          userId: user.id,
+          firstName: rawData.firstName,
+          lastName: rawData.lastName,
+          admissionNumber: rawData.admissionNumber,
+          dateOfBirth: new Date(rawData.dateOfBirth),
+          gender: rawData.gender,
+          enrollmentDate: new Date(rawData.enrollmentDate),
+          grade: rawData.grade,
+          section: rawData.section,
+          address: rawData.address,
+          parentId: rawData.parentId,
+          classId: rawData.classId,
+        },
+      })
+    } else {
+      // Create student without user account
+      await db.student.create({
+        data: {
+          firstName: rawData.firstName,
+          lastName: rawData.lastName,
+          admissionNumber: rawData.admissionNumber,
+          dateOfBirth: new Date(rawData.dateOfBirth),
+          gender: rawData.gender,
+          enrollmentDate: new Date(rawData.enrollmentDate),
+          grade: rawData.grade,
+          section: rawData.section,
+          address: rawData.address,
+          parentId: rawData.parentId,
+          classId: rawData.classId,
+        },
+      })
+    }
 
     revalidatePath("/dashboard/admin/students")
 
     return {
       success: true,
       message: "Student registered successfully",
-      student: {
-        id: student.id,
-        name: student.name,
-        email: student.email,
-        role: student.role,
-      },
     }
   } catch (error) {
-    console.error("Error registering student:", error)
+    console.error("Registration error:", error)
     return {
-      error: "Failed to register student",
+      success: false,
+      errors: {
+        _form: ["Something went wrong. Please try again."],
+      },
     }
   }
 }
 
-export async function getStudents(query = "", classId = "", parentId = "") {
+export async function getStudents(filters?: {
+  grade?: string
+  section?: string
+  classId?: string
+  parentId?: string
+}) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
+    const filter: any = {}
 
-    if (!session) {
-      throw new Error("You must be logged in to view students")
+    if (filters?.grade) {
+      filter.grade = filters.grade
     }
 
-    const whereClause: any = {
-      role: "STUDENT",
+    if (filters?.section) {
+      filter.section = filters.section
     }
 
-    if (query) {
-      whereClause.OR = [
-        { name: { contains: query, mode: "insensitive" } },
-        { email: { contains: query, mode: "insensitive" } },
-        { student: { admissionNumber: { contains: query, mode: "insensitive" } } },
-      ]
+    if (filters?.classId) {
+      filter.classId = filters.classId
     }
 
-    if (classId && classId !== "all") {
-      whereClause.student = {
-        ...whereClause.student,
-        classId,
-      }
+    if (filters?.parentId) {
+      filter.parentId = filters.parentId
     }
 
-    if (parentId && parentId !== "all") {
-      whereClause.student = {
-        ...whereClause.student,
-        parentId,
-      }
-    }
-
-    // If parent, only show their children
-    if (session.user.role === "PARENT") {
-      const parent = await db.parent.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-      })
-
-      if (!parent) {
-        throw new Error("Parent profile not found")
-      }
-
-      whereClause.student = {
-        ...whereClause.student,
-        parentId: parent.id,
-      }
-    }
-
-    const students = await db.user.findMany({
-      where: whereClause,
+    const students = await db.student.findMany({
+      where: filter,
       include: {
-        student: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        parent: {
           include: {
-            class: true,
-            parent: {
-              include: {
-                user: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
               },
             },
           },
         },
-      },
-      orderBy: {
-        name: "asc",
+        class: true,
       },
     })
 
     return students
   } catch (error) {
     console.error("Error fetching students:", error)
-    throw new Error("Failed to fetch students")
-  }
-}
-
-export async function getStudentById(id: string) {
-  try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      throw new Error("You must be logged in to view student details")
-    }
-
-    const student = await db.user.findUnique({
-      where: {
-        id,
-        role: "STUDENT",
-      },
-      include: {
-        student: {
-          include: {
-            class: {
-              include: {
-                teacher: {
-                  include: {
-                    user: true,
-                  },
-                },
-              },
-            },
-            parent: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        },
-      },
-    })
-
-    return student
-  } catch (error) {
-    console.error("Error fetching student:", error)
-    throw new Error("Failed to fetch student")
-  }
-}
-
-export async function updateStudent(id: string, formData: FormData) {
-  try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return {
-        success: false,
-        error: "You must be logged in to update a student",
-      }
-    }
-
-    // Only admin can update students
-    if (session.user.role !== "ADMIN") {
-      return {
-        success: false,
-        error: "You do not have permission to update students",
-      }
-    }
-
-    const fullName = formData.get("fullName") as string
-    const dateOfBirth = formData.get("dateOfBirth") as string
-    const gender = formData.get("gender") as string
-    const admissionNumber = formData.get("admissionNumber") as string
-    const classId = formData.get("classId") as string
-    const stream = formData.get("stream") as string
-    const parentId = formData.get("parentId") as string
-    const address = formData.get("address") as string
-    const email = formData.get("email") as string
-    const updatePassword = formData.get("updatePassword") === "true"
-    const password = formData.get("password") as string
-
-    if (!fullName || !dateOfBirth || !gender || !admissionNumber || !classId || !parentId || !address || !email) {
-      return {
-        success: false,
-        error: "All fields are required",
-      }
-    }
-
-    // Check if student exists
-    const existingUser = await db.user.findUnique({
-      where: {
-        id,
-        role: "STUDENT",
-      },
-      include: {
-        student: true,
-      },
-    })
-
-    if (!existingUser) {
-      return {
-        success: false,
-        error: "Student not found",
-      }
-    }
-
-    // Check if admission number is already used by another student
-    const existingAdmissionNumber = await db.student.findFirst({
-      where: {
-        admissionNumber,
-        NOT: {
-          id: existingUser.student?.id,
-        },
-      },
-    })
-
-    if (existingAdmissionNumber) {
-      return {
-        success: false,
-        error: "Admission number is already in use by another student",
-      }
-    }
-
-    // Check if email is already used by another user
-    const existingEmail = await db.user.findFirst({
-      where: {
-        email,
-        NOT: {
-          id,
-        },
-      },
-    })
-
-    if (existingEmail) {
-      return {
-        success: false,
-        error: "Email is already in use by another user",
-      }
-    }
-
-    // Split full name into first and last name
-    const nameParts = fullName.trim().split(" ")
-    const firstName = nameParts[0]
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""
-
-    // Update user data
-    const updateData: any = {
-      name: fullName,
-      email,
-    }
-
-    // Update password if requested
-    if (updatePassword && password) {
-      updateData.password = await hash(password, 10)
-    }
-
-    // Update user and student
-    await db.user.update({
-      where: {
-        id,
-      },
-      data: {
-        ...updateData,
-        student: {
-          update: {
-            firstName,
-            lastName,
-            admissionNumber,
-            dateOfBirth: new Date(dateOfBirth),
-            gender,
-            stream,
-            address,
-            classId,
-            parentId,
-          },
-        },
-      },
-    })
-
-    revalidatePath("/dashboard/admin/students")
-    revalidatePath(`/dashboard/admin/students/${id}`)
-
-    return {
-      success: true,
-      message: "Student updated successfully",
-    }
-  } catch (error) {
-    console.error("Error updating student:", error)
-    return {
-      success: false,
-      error: "Failed to update student",
-    }
-  }
-}
-
-export async function deleteStudent(id: string) {
-  try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return {
-        success: false,
-        error: "You must be logged in to delete a student",
-      }
-    }
-
-    // Only admin can delete students
-    if (session.user.role !== "ADMIN") {
-      return {
-        success: false,
-        error: "You do not have permission to delete students",
-      }
-    }
-
-    // Check if student exists
-    const student = await db.user.findUnique({
-      where: {
-        id,
-        role: "STUDENT",
-      },
-      include: {
-        student: true,
-      },
-    })
-
-    if (!student) {
-      return {
-        success: false,
-        error: "Student not found",
-      }
-    }
-
-    // Delete student and user
-    await db.student.delete({
-      where: {
-        id: student.student?.id,
-      },
-    })
-
-    await db.user.delete({
-      where: {
-        id,
-      },
-    })
-
-    revalidatePath("/dashboard/admin/students")
-
-    return {
-      success: true,
-      message: "Student deleted successfully",
-    }
-  } catch (error) {
-    console.error("Error deleting student:", error)
-    return {
-      success: false,
-      error: "Failed to delete student. Make sure to remove any related records first.",
-    }
+    return []
   }
 }
 
