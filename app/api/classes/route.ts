@@ -50,65 +50,28 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const grade = searchParams.get("grade")
-    const teacherId = searchParams.get("teacherId")
-
-    // Build filter
-    const filter: any = {}
-
-    if (grade) {
-      filter.grade = grade
-    }
-
-    if (teacherId) {
-      filter.teacherId = teacherId
-    }
-
-    // If teacher, only show their classes
-    if (session.user.role === "TEACHER") {
-      const teacher = await db.teacher.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-      })
-
-      if (!teacher) {
-        return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 })
-      }
-
-      filter.teacherId = teacher.id
-    }
-
-    // Get classes
+    // Get all classes
     const classes = await db.class.findMany({
-      where: filter,
       include: {
         teacher: {
           include: {
             user: {
               select: {
                 name: true,
-                email: true,
               },
             },
           },
         },
-        students: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            grade: true,
-            section: true,
-          },
-        },
+      },
+      orderBy: {
+        grade: "asc",
       },
     })
 
     return NextResponse.json(classes)
   } catch (error) {
-    console.error("Error fetching classes:", error)
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error fetching classes:", errorMessage)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

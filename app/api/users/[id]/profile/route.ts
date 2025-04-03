@@ -13,26 +13,24 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = params.id
-
     // Users can only access their own profile unless they are an admin
-    if (session.user.id !== userId && session.user.role !== "ADMIN") {
+    if (session.user.id !== params.id && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     // Get user profile
     const user = await db.user.findUnique({
       where: {
-        id: userId,
+        id: params.id,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        phone: true,
-        address: true,
-        bio: true,
+        // Remove phone field as it doesn't exist in the schema
+        // address: true,
+        // bio: true,
         image: true,
       },
     })
@@ -43,7 +41,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     return NextResponse.json(user)
   } catch (error) {
-    console.error("Error fetching user profile:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error fetching user profile:", errorMessage)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
@@ -58,41 +57,40 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = params.id
-
     // Users can only update their own profile unless they are an admin
-    if (session.user.id !== userId && session.user.role !== "ADMIN") {
+    if (session.user.id !== params.id && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { name, phone, address, bio } = await req.json()
+    const { name } = await req.json()
 
     // Update user profile
     const updatedUser = await db.user.update({
       where: {
-        id: userId,
+        id: params.id,
       },
       data: {
         name,
-        phone,
-        address,
-        bio,
+        // Remove phone field as it doesn't exist in the schema
+        // address,
+        // bio,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        phone: true,
-        address: true,
-        bio: true,
+        // Remove phone field as it doesn't exist in the schema
+        // address: true,
+        // bio: true,
         image: true,
       },
     })
 
     return NextResponse.json(updatedUser)
   } catch (error) {
-    console.error("Error updating user profile:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error updating user profile:", errorMessage)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

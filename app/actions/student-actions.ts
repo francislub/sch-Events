@@ -85,30 +85,31 @@ export async function registerStudent(formData: FormData) {
     // Hash the password
     const hashedPassword = await hash(password, 10)
 
-    // Create the student user
-    const student = await db.user.create({
+    // First create the user
+    const user = await db.user.create({
       data: {
         name: fullName,
         email,
         password: hashedPassword,
         role: "STUDENT",
-        student: {
-          create: {
-            firstName,
-            lastName,
-            admissionNumber,
-            dateOfBirth: new Date(dateOfBirth),
-            gender,
-            enrollmentDate: new Date(),
-            stream,
-            address,
-            classId,
-            parentId,
-          },
-        },
       },
-      include: {
-        student: true,
+    })
+
+    // Then create the student profile
+    const student = await db.student.create({
+      data: {
+        userId: user.id,
+        firstName,
+        lastName,
+        admissionNumber,
+        dateOfBirth: new Date(dateOfBirth),
+        gender,
+        enrollmentDate: new Date(),
+        grade: "Unknown", // Add required fields
+        section: stream || "A",
+        address,
+        classId,
+        parentId,
       },
     })
 
@@ -118,16 +119,17 @@ export async function registerStudent(formData: FormData) {
       success: true,
       message: "Student registered successfully",
       student: {
-        id: student.id,
-        name: student.name,
-        email: student.email,
-        role: student.role,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     }
   } catch (error) {
-    console.error("Error registering student:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error registering student:", errorMessage)
     return {
-      error: "Failed to register student",
+      error: "Failed to register student: " + errorMessage,
     }
   }
 }
@@ -149,20 +151,20 @@ export async function getStudents(query = "", classId = "", parentId = "") {
       whereClause.OR = [
         { name: { contains: query, mode: "insensitive" } },
         { email: { contains: query, mode: "insensitive" } },
-        { student: { admissionNumber: { contains: query, mode: "insensitive" } } },
+        { studentProfile: { admissionNumber: { contains: query, mode: "insensitive" } } },
       ]
     }
 
     if (classId && classId !== "all") {
-      whereClause.student = {
-        ...whereClause.student,
+      whereClause.studentProfile = {
+        ...whereClause.studentProfile,
         classId,
       }
     }
 
     if (parentId && parentId !== "all") {
-      whereClause.student = {
-        ...whereClause.student,
+      whereClause.studentProfile = {
+        ...whereClause.studentProfile,
         parentId,
       }
     }
@@ -179,8 +181,8 @@ export async function getStudents(query = "", classId = "", parentId = "") {
         throw new Error("Parent profile not found")
       }
 
-      whereClause.student = {
-        ...whereClause.student,
+      whereClause.studentProfile = {
+        ...whereClause.studentProfile,
         parentId: parent.id,
       }
     }
@@ -188,7 +190,7 @@ export async function getStudents(query = "", classId = "", parentId = "") {
     const students = await db.user.findMany({
       where: whereClause,
       include: {
-        student: {
+        studentProfile: {
           include: {
             class: true,
             parent: {
@@ -206,7 +208,8 @@ export async function getStudents(query = "", classId = "", parentId = "") {
 
     return students
   } catch (error) {
-    console.error("Error fetching students:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error fetching students:", errorMessage)
     throw new Error("Failed to fetch students")
   }
 }
@@ -226,7 +229,7 @@ export async function getStudentById(id: string) {
         role: "STUDENT",
       },
       include: {
-        student: {
+        studentProfile: {
           include: {
             class: {
               include: {
@@ -249,7 +252,8 @@ export async function getStudentById(id: string) {
 
     return student
   } catch (error) {
-    console.error("Error fetching student:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error fetching student:", errorMessage)
     throw new Error("Failed to fetch student")
   }
 }
@@ -300,11 +304,11 @@ export async function updateStudent(id: string, formData: FormData) {
         role: "STUDENT",
       },
       include: {
-        student: true,
+        studentProfile: true,
       },
     })
 
-    if (!existingUser) {
+    if (!existingUser || !existingUser.studentProfile) {
       return {
         success: false,
         error: "Student not found",
@@ -316,7 +320,7 @@ export async function updateStudent(id: string, formData: FormData) {
       where: {
         admissionNumber,
         NOT: {
-          id: existingUser.student?.id,
+          id: existingUser.studentProfile.id,
         },
       },
     })
@@ -361,26 +365,29 @@ export async function updateStudent(id: string, formData: FormData) {
       updateData.password = await hash(password, 10)
     }
 
-    // Update user and student
+    // Update user
     await db.user.update({
       where: {
         id,
       },
+      data: updateData,
+    })
+
+    // Update student profile
+    await db.student.update({
+      where: {
+        id: existingUser.studentProfile.id,
+      },
       data: {
-        ...updateData,
-        student: {
-          update: {
-            firstName,
-            lastName,
-            admissionNumber,
-            dateOfBirth: new Date(dateOfBirth),
-            gender,
-            stream,
-            address,
-            classId,
-            parentId,
-          },
-        },
+        firstName,
+        lastName,
+        admissionNumber,
+        dateOfBirth: new Date(dateOfBirth),
+        gender,
+        section: stream,
+        address,
+        classId,
+        parentId,
       },
     })
 
@@ -392,10 +399,11 @@ export async function updateStudent(id: string, formData: FormData) {
       message: "Student updated successfully",
     }
   } catch (error) {
-    console.error("Error updating student:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error updating student:", errorMessage)
     return {
       success: false,
-      error: "Failed to update student",
+      error: "Failed to update student: " + errorMessage,
     }
   }
 }
@@ -427,24 +435,25 @@ export async function deleteStudent(id: string) {
         role: "STUDENT",
       },
       include: {
-        student: true,
+        studentProfile: true,
       },
     })
 
-    if (!student) {
+    if (!student || !student.studentProfile) {
       return {
         success: false,
         error: "Student not found",
       }
     }
 
-    // Delete student and user
+    // Delete student profile
     await db.student.delete({
       where: {
-        id: student.student?.id,
+        id: student.studentProfile.id,
       },
     })
 
+    // Delete user
     await db.user.delete({
       where: {
         id,
@@ -458,7 +467,8 @@ export async function deleteStudent(id: string) {
       message: "Student deleted successfully",
     }
   } catch (error) {
-    console.error("Error deleting student:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error deleting student:", errorMessage)
     return {
       success: false,
       error: "Failed to delete student. Make sure to remove any related records first.",
