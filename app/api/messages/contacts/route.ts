@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     const contactsMap = new Map()
 
     messageContacts.forEach((message) => {
-      const contact = message.senderId === session.user.id ? message.receiver : message.sender
+      const contact = message.sender.id === session.user.id ? message.receiver : message.sender
 
       if (!contactsMap.has(contact.id)) {
         contactsMap.set(contact.id, {
@@ -58,9 +58,9 @@ export async function GET(req: Request) {
           role: contact.role,
           lastMessage: message.content,
           lastMessageTime: message.createdAt.toISOString(),
-          unreadCount: message.senderId !== session.user.id && !message.read ? 1 : 0,
+          unreadCount: message.sender.id !== session.user.id && !message.read ? 1 : 0,
         })
-      } else if (message.senderId !== session.user.id && !message.read) {
+      } else if (message.sender.id !== session.user.id && !message.read) {
         // Increment unread count for existing contact
         const existingContact = contactsMap.get(contact.id)
         existingContact.unreadCount += 1
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(contacts)
   } catch (error) {
-    console.error("Error fetching contacts:", error)
+    console.error("Error fetching contacts:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
       role: user.role,
     })
   } catch (error) {
-    console.error("Error adding contact:", error)
+    console.error("Error adding contact:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

@@ -40,6 +40,7 @@ export async function GET(req: Request) {
             id: true,
             name: true,
             image: true,
+            role: true,
           },
         },
         receiver: {
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
             id: true,
             name: true,
             image: true,
+            role: true,
           },
         },
       },
@@ -104,6 +106,7 @@ export async function POST(req: Request) {
             id: true,
             name: true,
             image: true,
+            role: true,
           },
         },
         receiver: {
@@ -111,6 +114,7 @@ export async function POST(req: Request) {
             id: true,
             name: true,
             image: true,
+            role: true,
           },
         },
       },

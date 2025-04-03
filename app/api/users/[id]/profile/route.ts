@@ -13,15 +13,17 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = params.id
+
     // Users can only access their own profile unless they are an admin
-    if (session.user.id !== params.id && session.user.role !== "ADMIN") {
+    if (session.user.id !== userId && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     // Get user profile
     const user = await db.user.findUnique({
       where: {
-        id: params.id,
+        id: userId,
       },
       select: {
         id: true,
@@ -41,7 +43,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     return NextResponse.json(user)
   } catch (error) {
-    console.error("Error fetching user profile:", error)
+    console.error("Error fetching user profile:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
@@ -56,8 +58,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = params.id
+
     // Users can only update their own profile unless they are an admin
-    if (session.user.id !== params.id && session.user.role !== "ADMIN") {
+    if (session.user.id !== userId && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -66,7 +70,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     // Update user profile
     const updatedUser = await db.user.update({
       where: {
-        id: params.id,
+        id: userId,
       },
       data: {
         name,
@@ -88,7 +92,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
     return NextResponse.json(updatedUser)
   } catch (error) {
-    console.error("Error updating user profile:", error)
+    console.error("Error updating user profile:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
