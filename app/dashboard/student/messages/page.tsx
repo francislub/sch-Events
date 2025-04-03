@@ -33,8 +33,12 @@ export default function StudentMessages() {
     const fetchContacts = async () => {
       try {
         const response = await fetch("/api/messages/contacts")
+        if (!response.ok) {
+          throw new Error("Failed to fetch contacts")
+        }
         const data = await response.json()
-        setContacts(data)
+        // Ensure contacts is an array
+        setContacts(Array.isArray(data) ? data : [])
         setIsLoading(false)
       } catch (error) {
         console.error("Error fetching contacts:", error)
@@ -43,6 +47,8 @@ export default function StudentMessages() {
           description: "Failed to load contacts. Please try again.",
           variant: "destructive",
         })
+        // Initialize with empty array on error
+        setContacts([])
         setIsLoading(false)
       }
     }
@@ -59,8 +65,11 @@ export default function StudentMessages() {
 
       try {
         const response = await fetch(`/api/messages?contactId=${selectedContact.id}`)
+        if (!response.ok) {
+          throw new Error("Failed to fetch messages")
+        }
         const data = await response.json()
-        setMessages(data)
+        setMessages(Array.isArray(data) ? data : [])
       } catch (error) {
         console.error("Error fetching messages:", error)
         toast({
@@ -68,6 +77,7 @@ export default function StudentMessages() {
           description: "Failed to load messages. Please try again.",
           variant: "destructive",
         })
+        setMessages([])
       }
     }
 
@@ -106,23 +116,19 @@ export default function StudentMessages() {
         }),
       })
 
+      if (!response.ok) {
+        throw new Error("Failed to send message")
+      }
+
       const data = await response.json()
 
-      if (response.ok) {
-        // Add the new message to the list
-        setMessages((prev) => [...prev, data])
-        setNewMessage("")
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to send message.",
-          variant: "destructive",
-        })
-      }
+      // Add the new message to the list
+      setMessages((prev) => [...prev, data])
+      setNewMessage("")
     } catch (error) {
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again.",
+        description: "Failed to send message. Please try again.",
         variant: "destructive",
       })
     } finally {

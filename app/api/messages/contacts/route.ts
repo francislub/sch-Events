@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-// GET contacts
 export async function GET(req: Request) {
   try {
     // Check authentication
@@ -13,69 +12,39 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get all users who have exchanged messages with the current user
-    const messageContacts = await db.message.findMany({
+    // Get all users except the current user
+    const users = await db.user.findMany({
       where: {
-        OR: [{ senderId: session.user.id }, { receiverId: session.user.id }],
+        NOT: {
+          id: session.user.id,
+        },
       },
       select: {
-        sender: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        teacherProfile: {
           select: {
-            id: true,
-            name: true,
-            image: true,
-            role: true,
+            department: true,
           },
         },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            role: true,
-          },
-        },
-        content: true,
-        createdAt: true,
-        read: true,
-      },
-      orderBy: {
-        createdAt: "desc",
       },
     })
 
-    // Extract unique contacts
-    const contactsMap = new Map()
-
-    messageContacts.forEach((message) => {
-      const contact = message.sender.id === session.user.id ? message.receiver : message.sender
-
-      if (!contactsMap.has(contact.id)) {
-        contactsMap.set(contact.id, {
-          id: contact.id,
-          name: contact.name,
-          image: contact.image,
-          role: contact.role,
-          lastMessage: message.content,
-          lastMessageTime: message.createdAt.toISOString(),
-          unreadCount: message.sender.id !== session.user.id && !message.read ? 1 : 0,
-        })
-      } else if (message.sender.id !== session.user.id && !message.read) {
-        // Increment unread count for existing contact
-        const existingContact = contactsMap.get(contact.id)
-        existingContact.unreadCount += 1
-        contactsMap.set(contact.id, existingContact)
-      }
-    })
-
-    // Convert map to array and sort by last message time
-    const contacts = Array.from(contactsMap.values()).sort(
-      (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime(),
-    )
+    // Format users for the contacts list
+    const contacts = users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.teacherProfile?.department,
+    }))
 
     return NextResponse.json(contacts)
   } catch (error) {
-    console.error("Error fetching contacts:", error instanceof Error ? error.message : "Unknown error")
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("Error fetching contacts:", errorMessage)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
