@@ -48,7 +48,7 @@ export async function sendMessage(formData: FormData) {
         senderId: session.user.id,
         receiverId: rawData.receiverId,
         content: rawData.content,
-        read: false,
+        isRead: false,
       },
     })
 
@@ -241,7 +241,6 @@ export async function getMessages(conversationWith?: string) {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
@@ -249,7 +248,6 @@ export async function getMessages(conversationWith?: string) {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
@@ -265,10 +263,10 @@ export async function getMessages(conversationWith?: string) {
         where: {
           senderId: conversationWith,
           receiverId: session.user.id,
-          read: false,
+          isRead: false,
         },
         data: {
-          read: true,
+          isRead: true,
         },
       })
     }
@@ -312,7 +310,6 @@ export async function getConversations() {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
@@ -320,7 +317,6 @@ export async function getConversations() {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
@@ -340,13 +336,13 @@ export async function getConversations() {
         conversations.set(otherUser.id, {
           user: otherUser,
           lastMessage: message,
-          unreadCount: message.receiverId === session.user.id && !message.read ? 1 : 0,
+          unreadCount: message.receiverId === session.user.id && !message.isRead ? 1 : 0,
         })
       } else {
         const conversation = conversations.get(otherUser.id)
 
         // Only update unread count for messages received by current user
-        if (message.receiverId === session.user.id && !message.read) {
+        if (message.receiverId === session.user.id && !message.isRead) {
           conversation.unreadCount += 1
         }
       }

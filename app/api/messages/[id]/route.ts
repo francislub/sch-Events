@@ -13,51 +13,35 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const messageId = params.id
+    const { id } = params
     const { content } = await req.json()
 
     if (!content) {
-      return NextResponse.json({ error: "Message content is required" }, { status: 400 })
+      return NextResponse.json({ error: "Content is required" }, { status: 400 })
     }
 
     // Check if message exists and belongs to the current user
-    const existingMessage = await db.message.findUnique({
+    const message = await db.message.findUnique({
       where: {
-        id: messageId,
+        id,
       },
     })
 
-    if (!existingMessage) {
+    if (!message) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 })
     }
 
-    if (existingMessage.senderId !== session.user.id) {
+    if (message.senderId !== session.user.id) {
       return NextResponse.json({ error: "You can only edit your own messages" }, { status: 403 })
     }
 
     // Update message
     const updatedMessage = await db.message.update({
       where: {
-        id: messageId,
+        id,
       },
       data: {
         content,
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
       },
     })
 
@@ -78,32 +62,33 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const messageId = params.id
+    const { id } = params
 
-    // Check if message exists and belongs to the current user
-    const existingMessage = await db.message.findUnique({
+    // Check if message exists
+    const message = await db.message.findUnique({
       where: {
-        id: messageId,
+        id,
       },
     })
 
-    if (!existingMessage) {
+    if (!message) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 })
     }
 
-    // Allow admins to delete any message, but other users can only delete their own
-    if (existingMessage.senderId !== session.user.id && session.user.role !== "ADMIN") {
+    // Check if user is authorized to delete the message
+    // Admin can delete any message, but other users can only delete their own
+    if (message.senderId !== session.user.id && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "You can only delete your own messages" }, { status: 403 })
     }
 
     // Delete message
     await db.message.delete({
       where: {
-        id: messageId,
+        id,
       },
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "Message deleted successfully" })
   } catch (error) {
     console.error("Error deleting message:", error)
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })

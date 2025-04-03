@@ -4,12 +4,12 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Send, Search, Plus, User } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Loader2, Send, Search, Plus, User, Edit, Trash2, Check, X } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
@@ -22,6 +22,20 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { format } from "date-fns"
 
 interface Message {
   id: string
@@ -32,28 +46,29 @@ interface Message {
   sender: {
     id: string
     name: string
-    image: string | null
+    role: string
   }
   receiver: {
     id: string
     name: string
-    image: string | null
+    role: string
   }
 }
 
 interface Contact {
   id: string
   name: string
-  image: string | null
   role: string
+  email: string
   lastMessage?: string
   lastMessageTime?: string
   unreadCount?: number
 }
 
-export default function MessagesPage() {
-  const { data: session } = useSession()
+export default function MessagesPage({ params }: { params: { role: string } }) {
+  const { data: session, status } = useSession()
   const { toast } = useToast()
+  const role = params.role
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
@@ -65,13 +80,24 @@ export default function MessagesPage() {
   const [newContactDialogOpen, setNewContactDialogOpen] = useState(false)
   const [availableUsers, setAvailableUsers] = useState<any[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
+  const [editingMessage, setEditingMessage] = useState<string | null>(null)
+  const [editedContent, setEditedContent] = useState("")
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Check if session is loading
+  useEffect(() => {
+    if (status === "loading") {
+      setIsLoading(true)
+    } else {
+      setIsLoading(false)
+    }
+  }, [status])
 
   // Fetch contacts
   useEffect(() => {
     const fetchContacts = async () => {
-      if (!session?.user?.id) return
+      if (status !== "authenticated" || !session?.user?.id) return
 
       try {
         const response = await fetch(`/api/messages/contacts`)
@@ -100,12 +126,12 @@ export default function MessagesPage() {
     }
 
     fetchContacts()
-  }, [session, toast, selectedContact])
+  }, [session, toast, selectedContact, status])
 
   // Fetch messages for selected contact
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!session?.user?.id || !selectedContact) return
+      if (status !== "authenticated" || !session?.user?.id || !selectedContact) return
 
       try {
         const response = await fetch(`/api/messages?contactId=${selectedContact.id}`)
@@ -127,7 +153,7 @@ export default function MessagesPage() {
     }
 
     fetchMessages()
-  }, [session, selectedContact, toast])
+  }, [session, selectedContact, toast, status])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -136,7 +162,7 @@ export default function MessagesPage() {
 
   // Fetch available users for new contact
   const fetchAvailableUsers = async () => {
-    if (!session?.user?.id) return
+    if (status !== "authenticated" || !session?.user?.id) return
 
     try {
       const response = await fetch(`/api/users?exclude=${session.user.id}`)
@@ -161,7 +187,7 @@ export default function MessagesPage() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!newMessage.trim() || !selectedContact) return
+    if (!newMessage.trim() || !selectedContact || status !== "authenticated") return
 
     setIsSending(true)
 
@@ -200,9 +226,75 @@ export default function MessagesPage() {
     }
   }
 
+  // Handle editing a message
+  const handleEditMessage = async (messageId: string) => {
+    if (!editedContent.trim()) return
+
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: editedContent,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update message")
+      }
+
+      // Update the message in the list
+      setMessages((prev) => prev.map((msg) => (msg.id === messageId ? { ...msg, content: editedContent } : msg)))
+      setEditingMessage(null)
+      setEditedContent("")
+
+      toast({
+        title: "Success",
+        description: "Message updated successfully",
+      })
+    } catch (error) {
+      console.error("Error updating message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update message. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle deleting a message
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete message")
+      }
+
+      // Remove the message from the list
+      setMessages((prev) => prev.filter((msg) => msg.id !== messageId))
+
+      toast({
+        title: "Success",
+        description: "Message deleted successfully",
+      })
+    } catch (error) {
+      console.error("Error deleting message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete message. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Handle adding a new contact
   const handleAddContact = async () => {
-    if (!selectedUserId) return
+    if (!selectedUserId || status !== "authenticated") return
 
     try {
       const response = await fetch("/api/messages/contacts", {
@@ -247,26 +339,19 @@ export default function MessagesPage() {
   // Filter contacts based on search query
   const filteredContacts = contacts.filter((contact) => contact.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
+  // Group contacts by role
+  const studentContacts = filteredContacts.filter((contact) => contact.role === "STUDENT")
+  const teacherContacts = filteredContacts.filter((contact) => contact.role === "TEACHER")
+  const parentContacts = filteredContacts.filter((contact) => contact.role === "PARENT")
+  const adminContacts = filteredContacts.filter((contact) => contact.role === "ADMIN")
+
   // Format date for display
   const formatMessageDate = (dateString: string) => {
     const date = new Date(dateString)
-    const now = new Date()
-
-    // If today, show time
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    }
-
-    // If this year, show month and day
-    if (date.getFullYear() === now.getFullYear()) {
-      return date.toLocaleDateString([], { month: "short", day: "numeric" })
-    }
-
-    // Otherwise show full date
-    return date.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })
+    return format(date, "h:mm a, MMM d")
   }
 
-  if (isLoading) {
+  if (status === "loading" || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -274,209 +359,440 @@ export default function MessagesPage() {
     )
   }
 
+  if (status === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold">Authentication Required</h2>
+          <p className="text-muted-foreground mt-2">Please sign in to access messages</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Determine which tabs to show based on user role
+  const getTabs = () => {
+    switch (role) {
+      case "admin":
+        return (
+          <TabsList className="w-full justify-start px-4 pt-2">
+            <TabsTrigger value="students" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Students
+            </TabsTrigger>
+            <TabsTrigger value="teachers" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Teachers
+            </TabsTrigger>
+            <TabsTrigger value="parents" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Parents
+            </TabsTrigger>
+          </TabsList>
+        )
+      case "teacher":
+        return (
+          <TabsList className="w-full justify-start px-4 pt-2">
+            <TabsTrigger value="students" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Students
+            </TabsTrigger>
+            <TabsTrigger value="parents" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Parents
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Admin
+            </TabsTrigger>
+          </TabsList>
+        )
+      case "parent":
+        return (
+          <TabsList className="w-full justify-start px-4 pt-2">
+            <TabsTrigger value="teachers" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Teachers
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Admin
+            </TabsTrigger>
+          </TabsList>
+        )
+      case "student":
+        return (
+          <TabsList className="w-full justify-start px-4 pt-2">
+            <TabsTrigger value="teachers" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Teachers
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Admin
+            </TabsTrigger>
+            <TabsTrigger value="parents" className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              Parents
+            </TabsTrigger>
+          </TabsList>
+        )
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Messages</h1>
-        <p className="text-muted-foreground">Communicate with teachers, students, and parents</p>
+        <p className="text-muted-foreground">
+          {role === "admin"
+            ? "Communicate with students, teachers, and parents"
+            : role === "teacher"
+              ? "Communicate with students, parents, and administrators"
+              : role === "parent"
+                ? "Communicate with teachers and administrators"
+                : "Communicate with teachers, administrators, and parents"}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
-        {/* Contacts List */}
-        <Card className="md:col-span-1 flex flex-col h-full">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-center">
-              <CardTitle>Contacts</CardTitle>
-              <Dialog open={newContactDialogOpen} onOpenChange={setNewContactDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={fetchAvailableUsers}>
-                    <Plus className="h-4 w-4" />
-                    <span className="sr-only">Add Contact</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Contact</DialogTitle>
-                    <DialogDescription>Select a user to add to your contacts</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="user">Select User</Label>
-                      <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableUsers.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.name} ({user.role})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+      <Card className="h-[calc(100vh-12rem)]">
+        <div className="grid h-full grid-cols-1 md:grid-cols-3">
+          <div className="border-r">
+            <div className="p-4 border-b">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-medium">Contacts</h3>
+                <Dialog open={newContactDialogOpen} onOpenChange={setNewContactDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={fetchAvailableUsers}>
+                      <Plus className="h-4 w-4" />
+                      <span className="sr-only">Add Contact</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Contact</DialogTitle>
+                      <DialogDescription>Select a user to add to your contacts</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="user">Select User</Label>
+                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a user" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableUsers.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.name} ({user.role})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setNewContactDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleAddContact} disabled={!selectedUserId}>
-                      Add Contact
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setNewContactDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddContact} disabled={!selectedUserId}>
+                        Add Contact
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search contacts..."
+                  className="pl-8"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search contacts..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full pr-4">
-              {filteredContacts.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? "No contacts found" : "No contacts yet"}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredContacts.map((contact) => (
-                    <div
-                      key={contact.id}
-                      className={`flex items-center p-3 rounded-md cursor-pointer transition-colors ${
-                        selectedContact?.id === contact.id ? "bg-primary/10" : "hover:bg-muted"
-                      }`}
-                      onClick={() => setSelectedContact(contact)}
-                    >
-                      <Avatar className="h-10 w-10 mr-3">
-                        <AvatarImage src={contact.image || undefined} alt={contact.name} />
-                        <AvatarFallback>
-                          {contact.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <p className="font-medium truncate">{contact.name}</p>
-                          {contact.lastMessageTime && (
-                            <span className="text-xs text-muted-foreground">
-                              {formatMessageDate(contact.lastMessageTime)}
-                            </span>
+
+            <Tabs defaultValue={role === "admin" ? "students" : "teachers"} className="w-full">
+              {getTabs()}
+
+              <ScrollArea className="h-[calc(100vh-16rem)]">
+                {role === "admin" && (
+                  <TabsContent value="students" className="m-0">
+                    {studentContacts.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">No student contacts found</div>
+                    ) : (
+                      <div>
+                        {studentContacts.map((contact) => (
+                          <div
+                            key={contact.id}
+                            className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted transition-colors ${
+                              selectedContact?.id === contact.id ? "bg-muted" : ""
+                            }`}
+                            onClick={() => setSelectedContact(contact)}
+                          >
+                            <Avatar>
+                              <AvatarFallback>{contact.name.charAt(0).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">{contact.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">Student</div>
+                            </div>
+                            {contact.unreadCount && contact.unreadCount > 0 && (
+                              <div className="ml-2 bg-primary text-primary-foreground rounded-full h-5 min-w-5 flex items-center justify-center text-xs">
+                                {contact.unreadCount}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                )}
+
+                <TabsContent value="teachers" className="m-0">
+                  {teacherContacts.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">No teacher contacts found</div>
+                  ) : (
+                    <div>
+                      {teacherContacts.map((contact) => (
+                        <div
+                          key={contact.id}
+                          className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted transition-colors ${
+                            selectedContact?.id === contact.id ? "bg-muted" : ""
+                          }`}
+                          onClick={() => setSelectedContact(contact)}
+                        >
+                          <Avatar>
+                            <AvatarFallback>{contact.name.charAt(0).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{contact.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">Teacher</div>
+                          </div>
+                          {contact.unreadCount && contact.unreadCount > 0 && (
+                            <div className="ml-2 bg-primary text-primary-foreground rounded-full h-5 min-w-5 flex items-center justify-center text-xs">
+                              {contact.unreadCount}
+                            </div>
                           )}
                         </div>
-                        {contact.lastMessage && (
-                          <p className="text-sm text-muted-foreground truncate">{contact.lastMessage}</p>
-                        )}
-                      </div>
-                      {contact.unreadCount && contact.unreadCount > 0 && (
-                        <div className="ml-2 bg-primary text-primary-foreground rounded-full h-5 min-w-5 flex items-center justify-center text-xs">
-                          {contact.unreadCount}
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+                  )}
+                </TabsContent>
 
-        {/* Messages */}
-        <Card className="md:col-span-2 flex flex-col h-full">
-          {selectedContact ? (
-            <>
-              <CardHeader className="pb-3 border-b">
-                <div className="flex items-center">
-                  <Avatar className="h-10 w-10 mr-3">
-                    <AvatarImage src={selectedContact.image || undefined} alt={selectedContact.name} />
-                    <AvatarFallback>
-                      {selectedContact.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()}
-                    </AvatarFallback>
+                <TabsContent value="parents" className="m-0">
+                  {parentContacts.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">No parent contacts found</div>
+                  ) : (
+                    <div>
+                      {parentContacts.map((contact) => (
+                        <div
+                          key={contact.id}
+                          className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted transition-colors ${
+                            selectedContact?.id === contact.id ? "bg-muted" : ""
+                          }`}
+                          onClick={() => setSelectedContact(contact)}
+                        >
+                          <Avatar>
+                            <AvatarFallback>{contact.name.charAt(0).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{contact.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">Parent</div>
+                          </div>
+                          {contact.unreadCount && contact.unreadCount > 0 && (
+                            <div className="ml-2 bg-primary text-primary-foreground rounded-full h-5 min-w-5 flex items-center justify-center text-xs">
+                              {contact.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="admin" className="m-0">
+                  {adminContacts.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">No admin contacts found</div>
+                  ) : (
+                    <div>
+                      {adminContacts.map((contact) => (
+                        <div
+                          key={contact.id}
+                          className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted transition-colors ${
+                            selectedContact?.id === contact.id ? "bg-muted" : ""
+                          }`}
+                          onClick={() => setSelectedContact(contact)}
+                        >
+                          <Avatar>
+                            <AvatarFallback>{contact.name.charAt(0).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{contact.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">Administrator</div>
+                          </div>
+                          {contact.unreadCount && contact.unreadCount > 0 && (
+                            <div className="ml-2 bg-primary text-primary-foreground rounded-full h-5 min-w-5 flex items-center justify-center text-xs">
+                              {contact.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </ScrollArea>
+            </Tabs>
+          </div>
+
+          <div className="col-span-2 flex flex-col h-full">
+            {selectedContact ? (
+              <>
+                <div className="p-4 border-b flex items-center gap-3">
+                  <Avatar>
+                    <AvatarFallback>{selectedContact.name.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <CardTitle className="text-lg">{selectedContact.name}</CardTitle>
-                    <CardDescription>{selectedContact.role}</CardDescription>
+                    <div className="font-medium">{selectedContact.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedContact.role === "TEACHER"
+                        ? "Teacher"
+                        : selectedContact.role === "STUDENT"
+                          ? "Student"
+                          : selectedContact.role === "ADMIN"
+                            ? "Administrator"
+                            : "Parent"}
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-0">
-                <ScrollArea className="h-full p-4">
-                  {messages.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">No messages yet. Start a conversation!</div>
-                  ) : (
-                    <div className="space-y-4">
-                      {messages.map((message) => {
-                        const isCurrentUser = message.senderId === session?.user?.id
+
+                <ScrollArea className="flex-1 p-4">
+                  <div className="space-y-4">
+                    {messages.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        No messages yet. Start the conversation!
+                      </div>
+                    ) : (
+                      messages.map((message) => {
+                        const isCurrentUser = message.senderId === session?.user.id
 
                         return (
                           <div key={message.id} className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
-                            {!isCurrentUser && (
-                              <Avatar className="h-8 w-8 mr-2 mt-1">
-                                <AvatarImage src={message.sender.image || undefined} alt={message.sender.name} />
-                                <AvatarFallback>
-                                  {message.sender.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
                             <div className="max-w-[70%]">
                               <div
                                 className={`p-3 rounded-lg ${
                                   isCurrentUser ? "bg-primary text-primary-foreground" : "bg-muted"
                                 }`}
                               >
-                                {message.content}
+                                {editingMessage === message.id ? (
+                                  <div className="space-y-2">
+                                    <Textarea
+                                      value={editedContent}
+                                      onChange={(e) => setEditedContent(e.target.value)}
+                                      className="min-h-[60px] bg-background"
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingMessage(null)
+                                          setEditedContent("")
+                                        }}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="sm" onClick={() => handleEditMessage(message.id)}>
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="text-sm">{message.content}</div>
+                                    <div
+                                      className={`text-xs mt-1 ${
+                                        isCurrentUser ? "text-primary-foreground/80" : "text-muted-foreground"
+                                      }`}
+                                    >
+                                      {formatMessageDate(message.createdAt)}
+                                    </div>
+                                    {isCurrentUser && (
+                                      <div className="flex justify-end gap-2 mt-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0"
+                                          onClick={() => {
+                                            setEditingMessage(message.id)
+                                            setEditedContent(message.content)
+                                          }}
+                                        >
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive">
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Delete Message</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Are you sure you want to delete this message? This action cannot be
+                                                undone.
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => handleDeleteMessage(message.id)}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              >
+                                                Delete
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1 text-right">
-                                {formatMessageDate(message.createdAt)}
-                              </p>
                             </div>
                           </div>
                         )
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
                 </ScrollArea>
-              </CardContent>
-              <div className="p-4 border-t">
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <Input
-                    placeholder="Type your message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    disabled={isSending}
-                  />
-                  <Button type="submit" size="icon" disabled={isSending || !newMessage.trim()}>
-                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </form>
+
+                <div className="p-4 border-t">
+                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                    <Input
+                      placeholder="Type your message..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      disabled={isSending}
+                    />
+                    <Button type="submit" size="icon" disabled={isSending || !newMessage.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select a contact to start messaging
               </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-              <User className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No conversation selected</h3>
-              <p className="text-muted-foreground mt-1">Select a contact to start messaging</p>
-            </div>
-          )}
-        </Card>
-      </div>
+            )}
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }
