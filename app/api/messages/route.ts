@@ -71,7 +71,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(messages)
   } catch (error) {
-    console.error("Error fetching messages:", error)
+    // Fix the error handling to ensure we're passing an object to console.error
+    console.error("Error fetching messages:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
@@ -122,7 +123,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(message)
   } catch (error) {
-    console.error("Error sending message:", error)
+    // Fix the error handling to ensure we're passing an object to console.error
+    console.error("Error sending message:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

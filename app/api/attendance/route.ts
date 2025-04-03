@@ -82,6 +82,7 @@ export async function GET(req: Request) {
     const status = searchParams.get("status")
     const grade = searchParams.get("grade")
     const section = searchParams.get("section")
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     // Build filter
     const filter: any = {}
@@ -155,8 +156,23 @@ export async function GET(req: Request) {
       }
     }
 
+    // If student role, only show their own attendance
+    if (session.user.role === "STUDENT") {
+      const student = await db.student.findUnique({
+        where: {
+          userId: session.user.id,
+        },
+      })
+
+      if (!student) {
+        return NextResponse.json({ error: "Student profile not found" }, { status: 404 })
+      }
+
+      // Override any other filters to only show this student's attendance
+      filter.studentId = student.id
+    }
     // If parent, only show attendance for their children
-    if (session.user.role === "PARENT") {
+    else if (session.user.role === "PARENT") {
       const parent = await db.parent.findUnique({
         where: {
           userId: session.user.id,
@@ -188,9 +204,8 @@ export async function GET(req: Request) {
         }
       }
     }
-
     // If teacher, only show attendance for students they teach
-    if (session.user.role === "TEACHER" && !studentId && !classId && !grade && !section) {
+    else if (session.user.role === "TEACHER" && !studentId && !classId && !grade && !section) {
       const teacher = await db.teacher.findUnique({
         where: {
           userId: session.user.id,
@@ -226,7 +241,6 @@ export async function GET(req: Request) {
 
     // Get attendance records with pagination
     const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
     const skip = (page - 1) * limit
 
     const attendance = await db.attendance.findMany({
@@ -285,18 +299,11 @@ export async function GET(req: Request) {
       late: stats.find((s) => s.status === "Late")?._count.status || 0,
     }
 
-    return NextResponse.json({
-      attendance,
-      pagination: {
-        total: totalCount,
-        page,
-        limit,
-        pages: Math.ceil(totalCount / limit),
-      },
-      statistics,
-    })
+    // Return the attendance array directly to fix the "attendance.map is not a function" error
+    return NextResponse.json(attendance)
   } catch (error) {
-    console.error("Error fetching attendance:", error)
+    // Fix error handling
+    console.error("Error fetching attendance:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

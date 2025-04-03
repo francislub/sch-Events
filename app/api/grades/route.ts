@@ -87,6 +87,7 @@ export async function GET(req: Request) {
     const studentId = searchParams.get("studentId")
     const subject = searchParams.get("subject")
     const term = searchParams.get("term")
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     // Build filter
     const filter: any = {}
@@ -103,8 +104,23 @@ export async function GET(req: Request) {
       filter.term = term
     }
 
+    // If student role, only show their own grades
+    if (session.user.role === "STUDENT") {
+      const student = await db.student.findUnique({
+        where: {
+          userId: session.user.id,
+        },
+      })
+
+      if (!student) {
+        return NextResponse.json({ error: "Student profile not found" }, { status: 404 })
+      }
+
+      // Override any other filters to only show this student's grades
+      filter.studentId = student.id
+    }
     // If parent, only show grades for their children
-    if (session.user.role === "PARENT") {
+    else if (session.user.role === "PARENT") {
       const parent = await db.parent.findUnique({
         where: {
           userId: session.user.id,
@@ -124,15 +140,23 @@ export async function GET(req: Request) {
 
       const childrenIds = parent.children.map((child) => child.id)
 
-      if (!studentId || !childrenIds.includes(studentId)) {
+      if (studentId && !childrenIds.includes(studentId)) {
+        // If specific studentId is requested but not a child of this parent
+        return NextResponse.json({ error: "Unauthorized to view this student's grades" }, { status: 403 })
+      }
+
+      if (studentId) {
+        // Keep the specific student filter if it's one of the parent's children
+        filter.studentId = studentId
+      } else {
+        // Otherwise, show grades for all children
         filter.studentId = {
           in: childrenIds,
         }
       }
     }
-
-    // If teacher, only show grades for students they teach
-    if (session.user.role === "TEACHER" && !studentId) {
+    // If teacher, only show grades for students they teach or grades they've assigned
+    else if (session.user.role === "TEACHER" && !studentId) {
       const teacher = await db.teacher.findUnique({
         where: {
           userId: session.user.id,
@@ -156,12 +180,13 @@ export async function GET(req: Request) {
 
       const studentIds = teacher.classes.flatMap((cls) => cls.students.map((student) => student.id))
 
-      filter.studentId = {
-        in: studentIds,
-      }
+      filter.OR = [{ studentId: { in: studentIds } }, { teacherId: teacher.id }]
     }
 
-    // Get grades
+    // Get grades with pagination
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const skip = (page - 1) * limit
+
     const grades = await db.grade.findMany({
       where: filter,
       include: {
@@ -172,17 +197,42 @@ export async function GET(req: Request) {
             lastName: true,
             grade: true,
             section: true,
+            class: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        teacher: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
       orderBy: {
         createdAt: "desc",
       },
+      skip,
+      take: limit,
     })
 
+    // Get total count for pagination
+    const totalCount = await db.grade.count({
+      where: filter,
+    })
+
+    // Return the grades array directly to fix the "grades.map is not a function" error
     return NextResponse.json(grades)
   } catch (error) {
-    console.error("Error fetching grades:", error)
+    // Fix error handling
+    console.error("Error fetching grades:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
