@@ -62,16 +62,15 @@ export async function GET(req: Request) {
       where: {
         senderId: contactId,
         receiverId: session.user.id,
-        read: false,
+        isRead: false,
       },
       data: {
-        read: true,
+        isRead: true,
       },
     })
 
     return NextResponse.json(messages)
   } catch (error) {
-    // Fix the error handling to ensure we're passing an object to console.error
     console.error("Error fetching messages:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
@@ -99,7 +98,7 @@ export async function POST(req: Request) {
         senderId: session.user.id,
         receiverId,
         content,
-        read: false,
+        isRead: false,
       },
       include: {
         sender: {
@@ -123,7 +122,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(message)
   } catch (error) {
-    // Fix the error handling to ensure we're passing an object to console.error
     console.error("Error sending message:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }

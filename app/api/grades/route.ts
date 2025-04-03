@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: "Grade added successfully", grade: gradeRecord }, { status: 201 })
   } catch (error) {
-    console.error("Error adding grade:", error)
+    console.error("Error adding grade:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
@@ -155,7 +155,7 @@ export async function GET(req: Request) {
         }
       }
     }
-    // If teacher, only show grades for students they teach or grades they've assigned
+    // If teacher, only show grades for students they teach
     else if (session.user.role === "TEACHER" && !studentId) {
       const teacher = await db.teacher.findUnique({
         where: {
@@ -180,7 +180,9 @@ export async function GET(req: Request) {
 
       const studentIds = teacher.classes.flatMap((cls) => cls.students.map((student) => student.id))
 
-      filter.OR = [{ studentId: { in: studentIds } }, { teacherId: teacher.id }]
+      filter.studentId = {
+        in: studentIds,
+      }
     }
 
     // Get grades with pagination
@@ -205,16 +207,6 @@ export async function GET(req: Request) {
             },
           },
         },
-        teacher: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
       },
       orderBy: {
         createdAt: "desc",
@@ -231,7 +223,6 @@ export async function GET(req: Request) {
     // Return the grades array directly to fix the "grades.map is not a function" error
     return NextResponse.json(grades)
   } catch (error) {
-    // Fix error handling
     console.error("Error fetching grades:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }

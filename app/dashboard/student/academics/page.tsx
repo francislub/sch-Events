@@ -24,10 +24,27 @@ export default function StudentAcademics() {
   useEffect(() => {
     const fetchGrades = async () => {
       try {
+        setIsLoading(true)
         const response = await fetch("/api/grades")
+
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`)
+        }
+
         const data = await response.json()
-        setGrades(data)
-        setIsLoading(false)
+
+        // Ensure grades is always an array
+        if (Array.isArray(data)) {
+          setGrades(data)
+        } else {
+          console.error("Unexpected data format:", data)
+          setGrades([])
+          toast({
+            title: "Error",
+            description: "Received unexpected data format from server.",
+            variant: "destructive",
+          })
+        }
       } catch (error) {
         console.error("Error fetching grades:", error)
         toast({
@@ -35,6 +52,8 @@ export default function StudentAcademics() {
           description: "Failed to load grades data. Please try again.",
           variant: "destructive",
         })
+        setGrades([])
+      } finally {
         setIsLoading(false)
       }
     }
@@ -44,16 +63,19 @@ export default function StudentAcademics() {
     }
   }, [session, toast])
 
-  // Filter grades
-  const filteredGrades = grades.filter((grade) => {
-    const matchesTerm = filter.term === "all" || grade.term === filter.term
-    const matchesSubject = filter.subject === "all" || grade.subject === filter.subject
-    return matchesTerm && matchesSubject
-  })
+  // Filter grades - only if grades is an array
+  const filteredGrades = Array.isArray(grades)
+    ? grades.filter((grade) => {
+        const matchesTerm = filter.term === "all" || grade.term === filter.term
+        const matchesSubject = filter.subject === "all" || grade.subject === filter.subject
+        return matchesTerm && matchesSubject
+      })
+    : []
 
   // Get unique terms and subjects for filters
-  const terms = [...new Set(grades.map((grade) => grade.term))].sort()
-  const subjects = [...new Set(grades.map((grade) => grade.subject))].sort()
+  const terms = Array.isArray(grades) ? [...new Set(grades.map((grade) => grade.term))].sort() : []
+
+  const subjects = Array.isArray(grades) ? [...new Set(grades.map((grade) => grade.subject))].sort() : []
 
   // Calculate average score
   const averageScore =

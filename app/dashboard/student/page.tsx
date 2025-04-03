@@ -24,7 +24,6 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { format } from "date-fns"
 
 export default function StudentDashboard() {
   const { data: session } = useSession()
@@ -55,12 +54,11 @@ export default function StudentDashboard() {
         const gradesResponse = await fetch("/api/grades?limit=5")
         if (gradesResponse.ok) {
           const gradesData = await gradesResponse.json()
-          // Handle different response formats
+          // Ensure grades is always an array
           if (Array.isArray(gradesData)) {
             setRecentGrades(gradesData)
-          } else if (gradesData && Array.isArray(gradesData.grades)) {
-            setRecentGrades(gradesData.grades)
           } else {
+            console.error("Unexpected grades data format:", gradesData)
             setRecentGrades([])
           }
         } else {
@@ -71,12 +69,11 @@ export default function StudentDashboard() {
         const attendanceResponse = await fetch("/api/attendance?limit=5")
         if (attendanceResponse.ok) {
           const attendanceData = await attendanceResponse.json()
-          // Handle different response formats
+          // Ensure attendance is always an array
           if (Array.isArray(attendanceData)) {
             setRecentAttendance(attendanceData)
-          } else if (attendanceData && Array.isArray(attendanceData.attendance)) {
-            setRecentAttendance(attendanceData.attendance)
           } else {
+            console.error("Unexpected attendance data format:", attendanceData)
             setRecentAttendance([])
           }
         } else {
@@ -90,8 +87,6 @@ export default function StudentDashboard() {
             const assignmentsData = await assignmentsResponse.json()
             if (Array.isArray(assignmentsData)) {
               setAssignments(assignmentsData)
-            } else if (assignmentsData && Array.isArray(assignmentsData.assignments)) {
-              setAssignments(assignmentsData.assignments)
             } else {
               setAssignments([])
             }
@@ -377,7 +372,7 @@ export default function StudentDashboard() {
             <div>
               <p className="text-sm font-medium mb-2">Recent Attendance</p>
               <div className="space-y-3">
-                {recentAttendance && recentAttendance.length > 0 ? (
+                {Array.isArray(recentAttendance) && recentAttendance.length > 0 ? (
                   recentAttendance.slice(0, 5).map((record) => (
                     <div key={record.id} className="flex items-center justify-between border-b pb-2">
                       <div className="flex items-center">
@@ -389,7 +384,7 @@ export default function StudentDashboard() {
                           <XCircle className="h-5 w-5 text-red-500 mr-2" />
                         )}
                         <div>
-                          <p className="font-medium">{format(new Date(record.date), "EEEE, MMM d")}</p>
+                          <p className="font-medium">{new Date(record.date).toLocaleDateString()}</p>
                           <p className="text-xs text-muted-foreground">{record.status}</p>
                         </div>
                       </div>
@@ -431,14 +426,14 @@ export default function StudentDashboard() {
             <TabsContent value="grades">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  {recentGrades && recentGrades.length > 0 ? (
+                  {Array.isArray(recentGrades) && recentGrades.length > 0 ? (
                     <div className="space-y-4">
                       {recentGrades.slice(0, 5).map((grade) => (
                         <div key={grade.id} className="flex items-center justify-between border-b pb-3">
                           <div>
                             <p className="font-medium">{grade.subject}</p>
                             <p className="text-sm text-muted-foreground">
-                              {grade.term} • {format(new Date(grade.createdAt), "MMM d, yyyy")}
+                              {grade.term} • {new Date(grade.createdAt).toLocaleDateString()}
                             </p>
                           </div>
                           <div className="flex items-center">
@@ -469,9 +464,13 @@ export default function StudentDashboard() {
                     <p className="text-sm font-medium mb-2">Grade Distribution</p>
                     <div className="flex items-center justify-between bg-muted p-4 rounded-lg">
                       {["A", "B", "C", "D", "F"].map((grade) => {
-                        const count = recentGrades ? recentGrades.filter((g) => g.grade === grade).length : 0
+                        const count = Array.isArray(recentGrades)
+                          ? recentGrades.filter((g) => g.grade === grade).length
+                          : 0
                         const percentage =
-                          recentGrades && recentGrades.length > 0 ? Math.round((count / recentGrades.length) * 100) : 0
+                          Array.isArray(recentGrades) && recentGrades.length > 0
+                            ? Math.round((count / recentGrades.length) * 100)
+                            : 0
 
                         return (
                           <div key={grade} className="flex flex-col items-center">
@@ -487,7 +486,7 @@ export default function StudentDashboard() {
                                         ? "bg-orange-500"
                                         : "bg-red-500"
                               }`}
-                              style={{ height: `${Math.max(percentage, 5)}px` }}
+                              style={{ height: `${Math.max(percentage * 2, 5)}px` }}
                             ></div>
                             <p className="text-xs font-medium">{grade}</p>
                             <p className="text-xs text-muted-foreground">{count}</p>
@@ -511,7 +510,7 @@ export default function StudentDashboard() {
 
             <TabsContent value="assignments">
               <div className="space-y-4">
-                {assignments && assignments.length > 0 ? (
+                {Array.isArray(assignments) && assignments.length > 0 ? (
                   assignments.map((assignment) => (
                     <Card key={assignment.id} className="overflow-hidden">
                       <div className="flex flex-col md:flex-row">
@@ -528,7 +527,7 @@ export default function StudentDashboard() {
                             <span>{assignment.subject}</span>
                             <span className="mx-2">•</span>
                             <Calendar className="h-4 w-4 mr-1" />
-                            <span>Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}</span>
+                            <span>Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
                           </div>
                         </div>
                         <div className="bg-muted p-4 md:p-6 md:w-48 flex flex-row md:flex-col justify-between items-center md:items-start">
@@ -582,8 +581,8 @@ export default function StudentDashboard() {
                   ${announcement.priority === "high" ? "bg-red-100 text-red-800" : "bg-primary/10 text-primary"}
                 `}
                 >
-                  <span className="text-xl font-bold">{format(announcement.date, "dd")}</span>
-                  <span className="text-xs">{format(announcement.date, "MMM")}</span>
+                  <span className="text-xl font-bold">{announcement.date.getDate()}</span>
+                  <span className="text-xs">{announcement.date.toLocaleString("default", { month: "short" })}</span>
                 </div>
                 <div>
                   <div className="flex items-center">
