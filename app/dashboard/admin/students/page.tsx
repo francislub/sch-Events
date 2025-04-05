@@ -36,10 +36,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { deleteStudent } from "@/app/actions/student-actions"
+import { useSession } from "next-auth/react"
 
 export default function StudentsPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { data: session, status } = useSession()
 
   const [students, setStudents] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
@@ -55,8 +57,16 @@ export default function StudentsPage() {
   const itemsPerPage = 10
 
   useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
+  useEffect(() => {
     async function loadData() {
       try {
+        setIsLoading(true)
+
         // Fetch students
         const studentsData = await getStudents(searchQuery, selectedClass, selectedParent)
         setStudents(studentsData || [])
@@ -82,8 +92,10 @@ export default function StudentsPage() {
       }
     }
 
-    loadData()
-  }, [searchQuery, selectedClass, selectedParent, toast])
+    if (status === "authenticated") {
+      loadData()
+    }
+  }, [searchQuery, selectedClass, selectedParent, toast, status])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,6 +141,23 @@ export default function StudentsPage() {
   // Pagination
   const totalPages = Math.ceil(students.length / itemsPerPage)
   const paginatedStudents = students.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  if (status === "loading") {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Students</h1>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-center items-center h-64">
+              <p className="text-lg">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -228,12 +257,12 @@ export default function StudentsPage() {
                   {paginatedStudents.map((student) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">{student.name}</TableCell>
-                      <TableCell>{student.student?.admissionNumber || "N/A"}</TableCell>
+                      <TableCell>{student.studentProfile?.admissionNumber || "N/A"}</TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {student.student?.class?.name || "Not assigned"}
+                        {student.studentProfile?.class?.name || "Not assigned"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {student.student?.parent?.user?.name || "Not assigned"}
+                        {student.studentProfile?.parent?.user?.name || "Not assigned"}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>

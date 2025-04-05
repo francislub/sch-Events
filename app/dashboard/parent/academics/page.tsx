@@ -7,76 +7,103 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { FileDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+
+interface Child {
+  id: string
+  firstName: string
+  lastName: string
+  grade: string
+  section: string
+}
+
+interface GradeRecord {
+  id: string
+  subject: string
+  term: string
+  score: number
+  grade: string
+  remarks: string
+  teacher: string
+}
 
 export default function ParentAcademics() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { toast } = useToast()
 
+  const [children, setChildren] = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState("")
   const [selectedTerm, setSelectedTerm] = useState("Term 1")
   const [isLoading, setIsLoading] = useState(true)
+  const [grades, setGrades] = useState<GradeRecord[]>([])
 
-  // Mock data for children and terms
-  const children = [
-    { id: "1", name: "Sarah Doe", grade: "10A" },
-    { id: "2", name: "Michael Doe", grade: "8B" },
-  ]
-
+  // Terms
   const terms = ["Term 1", "Term 2", "Term 3", "Final"]
 
-  // Mock data for grades
-  const [grades, setGrades] = useState<any[]>([])
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
-    // In a real app, you would fetch this data from your API
-    if (selectedChild && selectedTerm) {
-      // Simulate API call
-      setTimeout(() => {
-        const mockGrades = {
-          "1": {
-            // Sarah
-            "Term 1": [
-              { subject: "Mathematics", score: 92, grade: "A", remarks: "Excellent work!" },
-              { subject: "Science", score: 88, grade: "B+", remarks: "Good understanding of concepts." },
-              { subject: "English", score: 85, grade: "B", remarks: "Well-written essays, but needs work on grammar." },
-              { subject: "History", score: 90, grade: "A-", remarks: "Excellent analysis of historical events." },
-            ],
-            "Term 2": [
-              { subject: "Mathematics", score: 94, grade: "A", remarks: "Outstanding performance!" },
-              { subject: "Science", score: 90, grade: "A-", remarks: "Improved understanding of complex concepts." },
-              { subject: "English", score: 87, grade: "B+", remarks: "Improved grammar and writing style." },
-              { subject: "History", score: 92, grade: "A", remarks: "Excellent research and analysis." },
-            ],
-          },
-          "2": {
-            // Michael
-            "Term 1": [
-              {
-                subject: "Mathematics",
-                score: 82,
-                grade: "B",
-                remarks: "Good effort, needs more practice with algebra.",
-              },
-              { subject: "Science", score: 87, grade: "B+", remarks: "Strong interest and participation in class." },
-              { subject: "English", score: 89, grade: "B+", remarks: "Creative writing is excellent." },
-              { subject: "Geography", score: 83, grade: "B", remarks: "Good understanding of basic concepts." },
-            ],
-            "Term 2": [
-              { subject: "Mathematics", score: 85, grade: "B", remarks: "Showing improvement in algebra." },
-              { subject: "Science", score: 88, grade: "B+", remarks: "Excellent lab work." },
-              { subject: "English", score: 90, grade: "A-", remarks: "Outstanding progress in writing skills." },
-              { subject: "Geography", score: 85, grade: "B", remarks: "Good map work and project submissions." },
-            ],
-          },
+    async function fetchChildren() {
+      try {
+        const res = await fetch("/api/students?parentId=current")
+        if (!res.ok) throw new Error("Failed to fetch children")
+        const data = await res.json()
+        setChildren(data)
+        if (data.length > 0) {
+          setSelectedChild(data[0].id)
         }
-
-        setGrades(mockGrades[selectedChild as keyof typeof mockGrades]?.[selectedTerm] || [])
+      } catch (error) {
+        console.error("Error fetching children:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load your children's data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
         setIsLoading(false)
-      }, 500)
-    } else {
-      setGrades([])
-      setIsLoading(false)
+      }
     }
-  }, [selectedChild, selectedTerm])
+
+    if (status === "authenticated") {
+      fetchChildren()
+    }
+  }, [status, toast])
+
+  useEffect(() => {
+    async function fetchGrades() {
+      if (!selectedChild || !selectedTerm) {
+        setGrades([])
+        return
+      }
+
+      try {
+        setIsLoading(true)
+        const res = await fetch(`/api/grades?studentId=${selectedChild}&term=${selectedTerm}`)
+        if (!res.ok) throw new Error("Failed to fetch grades")
+        const data = await res.json()
+        setGrades(data)
+      } catch (error) {
+        console.error("Error fetching grades:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load academic records. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (selectedChild && selectedTerm) {
+      fetchGrades()
+    }
+  }, [selectedChild, selectedTerm, toast])
 
   const handleExport = () => {
     toast({
@@ -88,10 +115,10 @@ export default function ParentAcademics() {
   }
 
   // Calculate GPA
-  const calculateGPA = (grades: any[]) => {
+  const calculateGPA = (grades: GradeRecord[]) => {
     if (!grades.length) return "N/A"
 
-    const gradePoints = {
+    const gradePoints: { [key: string]: number } = {
       A: 4.0,
       "A-": 3.7,
       "B+": 3.3,
@@ -106,10 +133,27 @@ export default function ParentAcademics() {
     }
 
     const totalPoints = grades.reduce((sum, grade) => {
-      return sum + (gradePoints[grade.grade as keyof typeof gradePoints] || 0)
+      return sum + (gradePoints[grade.grade] || 0)
     }, 0)
 
     return (totalPoints / grades.length).toFixed(2)
+  }
+
+  if (isLoading && !children.length) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Academic Records</h1>
+          <p className="text-muted-foreground">Loading academic data...</p>
+        </div>
+        <Card className="animate-pulse">
+          <CardContent className="p-8">
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -135,7 +179,8 @@ export default function ParentAcademics() {
           <SelectContent>
             {children.map((child) => (
               <SelectItem key={child.id} value={child.id}>
-                {child.name} - {child.grade}
+                {child.firstName} {child.lastName} - Grade {child.grade}
+                {child.section}
               </SelectItem>
             ))}
           </SelectContent>
@@ -184,7 +229,8 @@ export default function ParentAcademics() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {children.find((c) => c.id === selectedChild)?.name} - {selectedTerm} Grades
+                  {children.find((c) => c.id === selectedChild)?.firstName}{" "}
+                  {children.find((c) => c.id === selectedChild)?.lastName} - {selectedTerm} Grades
                 </CardTitle>
                 <CardDescription>Detailed academic performance for {selectedTerm}</CardDescription>
               </CardHeader>
@@ -200,8 +246,8 @@ export default function ParentAcademics() {
                       </tr>
                     </thead>
                     <tbody>
-                      {grades.map((grade, index) => (
-                        <tr key={index} className="border-t">
+                      {grades.map((grade) => (
+                        <tr key={grade.id} className="border-t">
                           <td className="p-2">{grade.subject}</td>
                           <td className="p-2">{grade.score}</td>
                           <td className="p-2">
@@ -236,7 +282,8 @@ export default function ParentAcademics() {
               <CardHeader>
                 <CardTitle>Academic Summary</CardTitle>
                 <CardDescription>
-                  Overall performance summary for {children.find((c) => c.id === selectedChild)?.name}
+                  Overall performance summary for {children.find((c) => c.id === selectedChild)?.firstName}{" "}
+                  {children.find((c) => c.id === selectedChild)?.lastName}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -274,8 +321,8 @@ export default function ParentAcademics() {
                 <div className="mt-6">
                   <h3 className="font-medium mb-2">Subject Performance</h3>
                   <div className="space-y-3">
-                    {grades.map((grade, index) => (
-                      <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                    {grades.map((grade) => (
+                      <div key={grade.id} className="bg-gray-50 p-3 rounded-lg">
                         <div className="flex justify-between mb-1">
                           <span className="font-medium">{grade.subject}</span>
                           <span>{grade.score}%</span>

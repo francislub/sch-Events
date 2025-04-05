@@ -7,122 +7,135 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { FileDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+
+interface Child {
+  id: string
+  firstName: string
+  lastName: string
+  grade: string
+  section: string
+}
+
+interface AttendanceRecord {
+  id: string
+  date: string
+  status: string
+  day: string
+}
+
+interface MonthlyAttendance {
+  month: string
+  present: number
+  absent: number
+  late: number
+  rate: string
+}
 
 export default function ParentAttendance() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { toast } = useToast()
 
+  const [children, setChildren] = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState("")
   const [selectedMonth, setSelectedMonth] = useState("")
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([])
+  const [monthlyData, setMonthlyData] = useState<MonthlyAttendance[]>([])
   const [isLoading, setIsLoading] = useState(true)
-
-  // Mock data for children
-  const children = [
-    { id: "1", name: "Sarah Doe", grade: "10A" },
-    { id: "2", name: "Michael Doe", grade: "8B" },
-  ]
-
-  // Mock data for months
-  const months = [
-    { value: "2025-01", label: "January 2025" },
-    { value: "2025-02", label: "February 2025" },
-    { value: "2025-03", label: "March 2025" },
-  ]
-
-  // Mock data for attendance
-  const [attendanceData, setAttendanceData] = useState<any[]>([])
+  const [months, setMonths] = useState<{ value: string; label: string }[]>([])
 
   useEffect(() => {
-    // In a real app, you would fetch this data from your API
-    if (selectedChild && selectedMonth) {
-      setIsLoading(true)
-
-      // Simulate API call
-      setTimeout(() => {
-        const mockAttendance = {
-          "1": {
-            // Sarah
-            "2025-03": [
-              { date: "2025-03-01", day: "Monday", status: "Present" },
-              { date: "2025-03-02", day: "Tuesday", status: "Present" },
-              { date: "2025-03-03", day: "Wednesday", status: "Present" },
-              { date: "2025-03-04", day: "Thursday", status: "Absent" },
-              { date: "2025-03-05", day: "Friday", status: "Present" },
-              { date: "2025-03-08", day: "Monday", status: "Present" },
-              { date: "2025-03-09", day: "Tuesday", status: "Present" },
-              { date: "2025-03-10", day: "Wednesday", status: "Late" },
-              { date: "2025-03-11", day: "Thursday", status: "Present" },
-              { date: "2025-03-12", day: "Friday", status: "Present" },
-              { date: "2025-03-15", day: "Monday", status: "Present" },
-              { date: "2025-03-16", day: "Tuesday", status: "Present" },
-              { date: "2025-03-17", day: "Wednesday", status: "Present" },
-              { date: "2025-03-18", day: "Thursday", status: "Present" },
-              { date: "2025-03-19", day: "Friday", status: "Present" },
-            ],
-            "2025-02": [
-              { date: "2025-02-01", day: "Monday", status: "Present" },
-              { date: "2025-02-02", day: "Tuesday", status: "Present" },
-              { date: "2025-02-03", day: "Wednesday", status: "Present" },
-              { date: "2025-02-04", day: "Thursday", status: "Present" },
-              { date: "2025-02-05", day: "Friday", status: "Present" },
-              { date: "2025-02-08", day: "Monday", status: "Absent" },
-              { date: "2025-02-09", day: "Tuesday", status: "Absent" },
-              { date: "2025-02-10", day: "Wednesday", status: "Present" },
-              { date: "2025-02-11", day: "Thursday", status: "Present" },
-              { date: "2025-02-12", day: "Friday", status: "Present" },
-              { date: "2025-02-15", day: "Monday", status: "Present" },
-              { date: "2025-02-16", day: "Tuesday", status: "Present" },
-              { date: "2025-02-17", day: "Wednesday", status: "Late" },
-              { date: "2025-02-18", day: "Thursday", status: "Present" },
-              { date: "2025-02-19", day: "Friday", status: "Present" },
-            ],
-          },
-          "2": {
-            // Michael
-            "2025-03": [
-              { date: "2025-03-01", day: "Monday", status: "Present" },
-              { date: "2025-03-02", day: "Tuesday", status: "Present" },
-              { date: "2025-03-03", day: "Wednesday", status: "Absent" },
-              { date: "2025-03-04", day: "Thursday", status: "Present" },
-              { date: "2025-03-05", day: "Friday", status: "Present" },
-              { date: "2025-03-08", day: "Monday", status: "Present" },
-              { date: "2025-03-09", day: "Tuesday", status: "Present" },
-              { date: "2025-03-10", day: "Wednesday", status: "Present" },
-              { date: "2025-03-11", day: "Thursday", status: "Late" },
-              { date: "2025-03-12", day: "Friday", status: "Present" },
-              { date: "2025-03-15", day: "Monday", status: "Present" },
-              { date: "2025-03-16", day: "Tuesday", status: "Present" },
-              { date: "2025-03-17", day: "Wednesday", status: "Present" },
-              { date: "2025-03-18", day: "Thursday", status: "Present" },
-              { date: "2025-03-19", day: "Friday", status: "Absent" },
-            ],
-            "2025-02": [
-              { date: "2025-02-01", day: "Monday", status: "Present" },
-              { date: "2025-02-02", day: "Tuesday", status: "Present" },
-              { date: "2025-02-03", day: "Wednesday", status: "Present" },
-              { date: "2025-02-04", day: "Thursday", status: "Late" },
-              { date: "2025-02-05", day: "Friday", status: "Present" },
-              { date: "2025-02-08", day: "Monday", status: "Present" },
-              { date: "2025-02-09", day: "Tuesday", status: "Present" },
-              { date: "2025-02-10", day: "Wednesday", status: "Present" },
-              { date: "2025-02-11", day: "Thursday", status: "Present" },
-              { date: "2025-02-12", day: "Friday", status: "Absent" },
-              { date: "2025-02-15", day: "Monday", status: "Present" },
-              { date: "2025-02-16", day: "Tuesday", status: "Present" },
-              { date: "2025-02-17", day: "Wednesday", status: "Present" },
-              { date: "2025-02-18", day: "Thursday", status: "Present" },
-              { date: "2025-02-19", day: "Friday", status: "Present" },
-            ],
-          },
-        }
-
-        setAttendanceData(mockAttendance[selectedChild as keyof typeof mockAttendance]?.[selectedMonth] || [])
-        setIsLoading(false)
-      }, 500)
-    } else {
-      setAttendanceData([])
-      setIsLoading(false)
+    if (status === "unauthenticated") {
+      router.push("/login")
     }
-  }, [selectedChild, selectedMonth])
+  }, [status, router])
+
+  useEffect(() => {
+    async function fetchChildren() {
+      try {
+        const res = await fetch("/api/students?parentId=current")
+        if (!res.ok) throw new Error("Failed to fetch children")
+        const data = await res.json()
+        setChildren(data)
+        if (data.length > 0) {
+          setSelectedChild(data[0].id)
+        }
+      } catch (error) {
+        console.error("Error fetching children:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load your children's data. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    if (status === "authenticated") {
+      fetchChildren()
+    }
+  }, [status, toast])
+
+  useEffect(() => {
+    // Generate months for the current year
+    const currentDate = new Date()
+    const currentYear = currentDate.getFullYear()
+    const monthsArray = []
+
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentYear, i, 1)
+      const monthValue = `${currentYear}-${String(i + 1).padStart(2, "0")}`
+      const monthLabel = date.toLocaleString("default", { month: "long", year: "numeric" })
+      monthsArray.push({ value: monthValue, label: monthLabel })
+    }
+
+    setMonths(monthsArray)
+
+    // Set current month as default
+    const currentMonth = `${currentYear}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`
+    setSelectedMonth(currentMonth)
+  }, [])
+
+  useEffect(() => {
+    async function fetchAttendance() {
+      if (!selectedChild || !selectedMonth) {
+        setAttendanceData([])
+        setMonthlyData([])
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        setIsLoading(true)
+
+        // Fetch daily attendance records
+        const dailyRes = await fetch(`/api/attendance?studentId=${selectedChild}&month=${selectedMonth}`)
+        if (!dailyRes.ok) throw new Error("Failed to fetch attendance records")
+        const dailyData = await dailyRes.json()
+        setAttendanceData(dailyData)
+
+        // Fetch monthly attendance summary
+        const monthlyRes = await fetch(`/api/attendance/summary?studentId=${selectedChild}&months=3`)
+        if (!monthlyRes.ok) throw new Error("Failed to fetch attendance summary")
+        const monthlyData = await monthlyRes.json()
+        setMonthlyData(monthlyData)
+      } catch (error) {
+        console.error("Error fetching attendance:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load attendance data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (selectedChild) {
+      fetchAttendance()
+    }
+  }, [selectedChild, selectedMonth, toast])
 
   const handleExport = () => {
     toast({
@@ -149,6 +162,23 @@ export default function ParentAttendance() {
 
   const stats = calculateStats()
 
+  if (isLoading && !children.length) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Attendance Records</h1>
+          <p className="text-muted-foreground">Loading attendance data...</p>
+        </div>
+        <Card className="animate-pulse">
+          <CardContent className="p-8">
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -172,7 +202,8 @@ export default function ParentAttendance() {
           <SelectContent>
             {children.map((child) => (
               <SelectItem key={child.id} value={child.id}>
-                {child.name} - {child.grade}
+                {child.firstName} {child.lastName} - Grade {child.grade}
+                {child.section}
               </SelectItem>
             ))}
           </SelectContent>
@@ -192,10 +223,10 @@ export default function ParentAttendance() {
         </Select>
       </div>
 
-      {!selectedChild || !selectedMonth ? (
+      {!selectedChild ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-10">
-            <p className="text-muted-foreground">Please select a child and month to view attendance records.</p>
+            <p className="text-muted-foreground">Please select a child to view attendance records.</p>
           </CardContent>
         </Card>
       ) : isLoading ? (
@@ -221,7 +252,8 @@ export default function ParentAttendance() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {children.find((c) => c.id === selectedChild)?.name} -{" "}
+                  {children.find((c) => c.id === selectedChild)?.firstName}{" "}
+                  {children.find((c) => c.id === selectedChild)?.lastName} -{" "}
                   {months.find((m) => m.value === selectedMonth)?.label} Attendance
                 </CardTitle>
                 <CardDescription>Daily attendance records for the selected month</CardDescription>
@@ -237,8 +269,8 @@ export default function ParentAttendance() {
                       </tr>
                     </thead>
                     <tbody>
-                      {attendanceData.map((record, index) => (
-                        <tr key={index} className="border-t">
+                      {attendanceData.map((record) => (
+                        <tr key={record.id} className="border-t">
                           <td className="p-2">{new Date(record.date).toLocaleDateString()}</td>
                           <td className="p-2">{record.day}</td>
                           <td className="p-2">
@@ -268,8 +300,8 @@ export default function ParentAttendance() {
               <CardHeader>
                 <CardTitle>Attendance Summary</CardTitle>
                 <CardDescription>
-                  Overview of attendance for {children.find((c) => c.id === selectedChild)?.name} in{" "}
-                  {months.find((m) => m.value === selectedMonth)?.label}
+                  Overview of attendance for {children.find((c) => c.id === selectedChild)?.firstName}{" "}
+                  {children.find((c) => c.id === selectedChild)?.lastName}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -301,8 +333,37 @@ export default function ParentAttendance() {
 
                 <div className="mt-6">
                   <h3 className="font-medium mb-2">Monthly Trend</h3>
-                  <div className="h-[200px] bg-muted rounded-md flex items-center justify-center">
-                    <p className="text-muted-foreground">Attendance trend chart would be displayed here</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-muted">
+                          <th className="p-2 text-left font-medium">Month</th>
+                          <th className="p-2 text-left font-medium">Present</th>
+                          <th className="p-2 text-left font-medium">Absent</th>
+                          <th className="p-2 text-left font-medium">Late</th>
+                          <th className="p-2 text-left font-medium">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyData.length > 0 ? (
+                          monthlyData.map((record, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="p-2">{record.month}</td>
+                              <td className="p-2">{record.present}</td>
+                              <td className="p-2">{record.absent}</td>
+                              <td className="p-2">{record.late}</td>
+                              <td className="p-2 font-medium">{record.rate}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                              No monthly summary available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </CardContent>
