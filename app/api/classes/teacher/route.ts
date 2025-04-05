@@ -1,47 +1,46 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
+import prisma from "@/lib/db"
 
-export async function GET(req: Request) {
+export async function GET(request: NextRequest) {
   try {
-    // Check authentication
     const session = await getServerSession(authOptions)
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session || session.user.role !== "TEACHER") {
+      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+      })
     }
 
-    // Only teachers can access this endpoint
-    if (session.user.role !== "TEACHER") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const teacherId = session.user.id
 
-    // Find teacher profile
-    const teacher = await db.teacher.findUnique({
+    // Get classes taught by the teacher
+    const classes = await prisma.class.findMany({
       where: {
-        userId: session.user.id,
+        teacherId,
+      },
+      include: {
+        students: true,
+        subjects: true,
       },
     })
 
-    if (!teacher) {
-      return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 })
-    }
+    // Format the response
+    const formattedClasses = classes.map((cls) => ({
+      id: cls.id,
+      name: cls.name,
+      section: cls.section,
+      studentCount: cls.students.length,
+      subjects: cls.subjects.map((subject) => subject.name),
+    }))
 
-    // Get classes taught by this teacher
-    const classes = await db.class.findMany({
-      where: {
-        teacherId: teacher.id,
-      },
-      orderBy: {
-        grade: "asc",
-      },
-    })
-
-    return NextResponse.json(classes)
+    return NextResponse.json(formattedClasses)
   } catch (error) {
     console.error("Error fetching teacher classes:", error)
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+    })
   }
 }
 

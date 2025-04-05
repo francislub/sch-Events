@@ -59,7 +59,7 @@ export default function TeacherStudents() {
         const response = await fetch(url)
         if (!response.ok) throw new Error("Failed to fetch students")
         const data = await response.json()
-        setStudents(data)
+        setStudents(Array.isArray(data) ? data : [])
       } catch (error) {
         console.error("Error fetching students:", error)
         toast({
@@ -67,6 +67,7 @@ export default function TeacherStudents() {
           description: "Failed to load students. Please try again.",
           variant: "destructive",
         })
+        setStudents([])
       } finally {
         setIsLoading(false)
       }
@@ -76,13 +77,15 @@ export default function TeacherStudents() {
   }, [selectedClass, toast])
 
   // Filter students based on search query
-  const filteredStudents = students.filter((student) => {
-    const fullName = `${student.firstName} ${student.lastName}`.toLowerCase()
-    const admissionNumber = student.admissionNumber.toLowerCase()
-    const query = searchQuery.toLowerCase()
+  const filteredStudents = Array.isArray(students)
+    ? students.filter((student) => {
+        const fullName = `${student.firstName} ${student.lastName}`.toLowerCase()
+        const admissionNumber = student.admissionNumber?.toLowerCase() || ""
+        const query = searchQuery.toLowerCase()
 
-    return fullName.includes(query) || admissionNumber.includes(query)
-  })
+        return fullName.includes(query) || admissionNumber.includes(query)
+      })
+    : []
 
   const handleDeleteClick = (student: any) => {
     setStudentToDelete(student)

@@ -1,71 +1,101 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Send, User } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function TeacherMessages() {
   const [selectedParent, setSelectedParent] = useState("")
   const [message, setMessage] = useState("")
+  const [parents, setParents] = useState<any[]>([])
+  const [messages, setMessages] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
-  // Mock data for parents
-  const parents = [
-    { id: "1", name: "John Doe", children: ["Sarah Doe (Grade 10A)"] },
-    { id: "2", name: "Jane Smith", children: ["Michael Smith (Grade 10A)"] },
-    { id: "3", name: "Robert Johnson", children: ["Emily Johnson (Grade 9B)"] },
-    { id: "4", name: "Mary Wilson", children: ["David Wilson (Grade 11C)"] },
-  ]
-
-  // Mock data for messages
-  const [messages, setMessages] = useState([
-    {
-      id: "1",
-      sender: "John Doe",
-      recipient: "You",
-      content: "Hello, I wanted to discuss Sarah's recent math test.",
-      timestamp: "2025-03-10T14:30:00",
-    },
-    {
-      id: "2",
-      sender: "You",
-      recipient: "John Doe",
-      content:
-        "Hi there! I'd be happy to discuss Sarah's performance. She did well overall but struggled with some of the algebra problems.",
-      timestamp: "2025-03-10T15:45:00",
-    },
-    {
-      id: "3",
-      sender: "John Doe",
-      recipient: "You",
-      content: "Thank you for the feedback. Is there anything we can do to help her improve in those areas?",
-      timestamp: "2025-03-11T09:15:00",
-    },
-    {
-      id: "4",
-      sender: "You",
-      recipient: "John Doe",
-      content: "I'd recommend some additional practice with equations. I can provide some resources if you'd like.",
-      timestamp: "2025-03-11T10:30:00",
-    },
-  ])
-
-  const handleSendMessage = () => {
-    if (!selectedParent || !message.trim()) return
-
-    const newMessage = {
-      id: Date.now().toString(),
-      sender: "You",
-      recipient: parents.find((p) => p.id === selectedParent)?.name || "",
-      content: message,
-      timestamp: new Date().toISOString(),
+  // Fetch parents of students taught by the teacher
+  useEffect(() => {
+    const fetchParents = async () => {
+      try {
+        const response = await fetch("/api/parents/teacher")
+        if (!response.ok) throw new Error("Failed to fetch parents")
+        const data = await response.json()
+        setParents(data)
+      } catch (error) {
+        console.error("Error fetching parents:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load parents. Please try again.",
+          variant: "destructive",
+        })
+      }
     }
 
-    setMessages([...messages, newMessage])
-    setMessage("")
+    fetchParents()
+  }, [toast])
+
+  // Fetch messages
+  useEffect(() => {
+    const fetchMessages = async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetch("/api/messages")
+        if (!response.ok) throw new Error("Failed to fetch messages")
+        const data = await response.json()
+        setMessages(data)
+      } catch (error) {
+        console.error("Error fetching messages:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load messages. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchMessages()
+  }, [toast])
+
+  const handleSendMessage = async () => {
+    if (!selectedParent || !message.trim()) return
+
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipientId: selectedParent,
+          content: message,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to send message")
+
+      const newMessage = await response.json()
+
+      setMessages((prev) => [...prev, newMessage])
+      setMessage("")
+
+      toast({
+        title: "Success",
+        description: "Message sent successfully",
+      })
+    } catch (error) {
+      console.error("Error sending message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -102,7 +132,7 @@ export default function TeacherMessages() {
                   <SelectContent>
                     {parents.map((parent) => (
                       <SelectItem key={parent.id} value={parent.id}>
-                        {parent.name} - {parent.children.join(", ")}
+                        {parent.name} - {parent.children?.join(", ")}
                       </SelectItem>
                     ))}
                   </SelectContent>

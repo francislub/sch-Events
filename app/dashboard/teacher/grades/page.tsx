@@ -15,9 +15,9 @@ export default function TeacherGrades() {
   const { toast } = useToast()
 
   const [filter, setFilter] = useState({
-    class: "",
-    subject: "",
-    term: "",
+    class: "all",
+    subject: "all",
+    term: "all",
     search: "",
   })
 
@@ -25,89 +25,90 @@ export default function TeacherGrades() {
   const [isLoading, setIsLoading] = useState(true)
 
   // Mock data for classes, subjects, and terms
-  const classes = [
-    { id: "1", name: "10A" },
-    { id: "2", name: "10B" },
-    { id: "3", name: "9A" },
-    { id: "4", name: "9B" },
-  ]
-
-  const subjects = [
-    "Mathematics",
-    "English",
-    "Science",
-    "History",
-    "Geography",
-    "Physics",
-    "Chemistry",
-    "Biology",
-    "Computer Science",
-    "Art",
-    "Music",
-    "Physical Education",
-  ]
-
-  const terms = ["Term 1", "Term 2", "Term 3", "Final"]
+  const [classes, setClasses] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<string[]>([])
+  const [terms, setTerms] = useState<string[]>([])
 
   // Mock data for grades
   useEffect(() => {
-    // In a real app, you would fetch this data from your API
-    const mockGrades = [
-      {
-        id: "1",
-        student: { id: "1", firstName: "Sarah", lastName: "Doe", grade: "10", section: "A" },
-        subject: "Mathematics",
-        term: "Term 1",
-        score: 92,
-        grade: "A",
-        remarks: "Excellent work!",
-        createdAt: "2025-03-10T14:30:00",
-      },
-      {
-        id: "2",
-        student: { id: "2", firstName: "Michael", lastName: "Smith", grade: "10", section: "A" },
-        subject: "Mathematics",
-        term: "Term 1",
-        score: 85,
-        grade: "B",
-        remarks: "Good effort, but needs improvement in algebra.",
-        createdAt: "2025-03-10T14:35:00",
-      },
-      {
-        id: "3",
-        student: { id: "3", firstName: "Emily", lastName: "Johnson", grade: "9", section: "B" },
-        subject: "Science",
-        term: "Term 1",
-        score: 88,
-        grade: "B+",
-        remarks: "Strong understanding of concepts.",
-        createdAt: "2025-03-11T09:15:00",
-      },
-      {
-        id: "4",
-        student: { id: "4", firstName: "David", lastName: "Wilson", grade: "10", section: "B" },
-        subject: "English",
-        term: "Term 1",
-        score: 78,
-        grade: "C+",
-        remarks: "Needs to improve writing skills.",
-        createdAt: "2025-03-11T10:30:00",
-      },
-      {
-        id: "5",
-        student: { id: "1", firstName: "Sarah", lastName: "Doe", grade: "10", section: "A" },
-        subject: "Science",
-        term: "Term 1",
-        score: 95,
-        grade: "A",
-        remarks: "Outstanding performance in all areas.",
-        createdAt: "2025-03-12T14:30:00",
-      },
-    ]
+    const fetchGrades = async () => {
+      setIsLoading(true)
+      try {
+        let url = "/api/grades/teacher?"
 
-    setGrades(mockGrades)
-    setIsLoading(false)
-  }, [])
+        if (filter.class && filter.class !== "all") {
+          url += `classId=${filter.class}&`
+        }
+
+        if (filter.subject && filter.subject !== "all") {
+          url += `subject=${filter.subject}&`
+        }
+
+        if (filter.term && filter.term !== "all") {
+          url += `term=${filter.term}&`
+        }
+
+        if (filter.search) {
+          url += `search=${filter.search}&`
+        }
+
+        const response = await fetch(url)
+        if (!response.ok) throw new Error("Failed to fetch grades")
+        const data = await response.json()
+        setGrades(Array.isArray(data) ? data : [])
+      } catch (error) {
+        console.error("Error fetching grades:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load grades. Please try again.",
+          variant: "destructive",
+        })
+        setGrades([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchGrades()
+  }, [filter, toast])
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const response = await fetch("/api/classes/teacher")
+        if (!response.ok) throw new Error("Failed to fetch classes")
+        const data = await response.json()
+        setClasses(data)
+      } catch (error) {
+        console.error("Error fetching classes:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load classes. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    const fetchSubjectsAndTerms = async () => {
+      try {
+        const response = await fetch("/api/subjects")
+        if (!response.ok) throw new Error("Failed to fetch subjects")
+        const data = await response.json()
+        setSubjects(data.subjects || [])
+        setTerms(data.terms || [])
+      } catch (error) {
+        console.error("Error fetching subjects and terms:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load subjects and terms. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchClasses()
+    fetchSubjectsAndTerms()
+  }, [toast])
 
   // Filter grades based on selected filters
   const filteredGrades = grades.filter((grade) => {

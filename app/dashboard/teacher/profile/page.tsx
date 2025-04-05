@@ -1,441 +1,332 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSession } from "next-auth/react"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { Phone, Mail, GraduationCap, BookOpen, Clock, Users, Activity } from 'lucide-react'
+import { Loader2 } from "lucide-react"
 
 export default function TeacherProfile() {
+  const { data: session } = useSession()
   const { toast } = useToast()
+
   const [isLoading, setIsLoading] = useState(true)
-  const [teacherData, setTeacherData] = useState<any>(null)
-  
-  const [profileData, setProfileData] = useState({
+  const [isSaving, setIsSaving] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+
+  const [profile, setProfile] = useState({
     name: "",
     email: "",
     phone: "",
-    department: "",
+    address: "",
+    bio: "",
     qualification: "",
-    bio: ""
+    experience: "",
+    specialization: "",
   })
-  
-  const [passwordData, setPasswordData] = useState({
+
+  const [passwords, setPasswords] = useState({
     currentPassword: "",
     newPassword: "",
-    confirmPassword: ""
+    confirmPassword: "",
   })
-  
-  // Fetch teacher profile data
+
   useEffect(() => {
     const fetchProfile = async () => {
-      try {
-        // In a real app, this would fetch from your API
-        // const response = await fetch('/api/teacher/profile')
-        // const data = await response.json()
-        // setTeacherData(data)
-        // setProfileData({
-        //   name: data.user.name,
-        //   email: data.user.email,
-        //   phone: data.contactNumber || "",
-        //   department: data.department,
-        //   qualification: data.qualification,
-        //   bio: data.bio || ""
-        // })
+      if (!session?.user?.id) return
 
-        // Mock data for demonstration
-        setTimeout(() => {
-          const mockTeacher = {
-            id: "1",
-            department: "Mathematics",
-            qualification: "M.Sc. Mathematics, B.Ed.",
-            contactNumber: "+1 234-567-8910",
-            bio: "Experienced mathematics teacher with 8 years of teaching experience. Specialized in advanced mathematics and calculus.",
-            user: {
-              id: "1",
-              name: "Ms. Johnson",
-              email: "johnson@wobulenzihigh.edu",
-              role: "TEACHER"
-            },
-            classes: [
-              { id: "1", name: "10A", studentsCount: 32 },
-              { id: "2", name: "10B", studentsCount: 30 },
-              { id: "3", name: "9A", studentsCount: 28 },
-              { id: "4", name: "9B", studentsCount: 27 },
-              { id: "5", name: "10Adv", studentsCount: 10 }
-            ],
-            statistics: {
-              totalStudents: 127,
-              classesPerWeek: 15,
-              averageAttendance: "92%",
-              averageGrade: "B+"
-            }
-          }
-          
-          setTeacherData(mockTeacher)
-          setProfileData({
-            name: mockTeacher.user.name,
-            email: mockTeacher.user.email,
-            phone: mockTeacher.contactNumber || "",
-            department: mockTeacher.department,
-            qualification: mockTeacher.qualification,
-            bio: mockTeacher.bio || ""
-          })
-          setIsLoading(false)
-        }, 1000)
+      setIsLoading(true)
+      try {
+        const response = await fetch(`/api/users/${session.user.id}/profile`)
+        if (!response.ok) throw new Error("Failed to fetch profile")
+
+        const data = await response.json()
+        setProfile({
+          name: data.name || "",
+          email: data.email || "",
+          phone: data.phone || "",
+          address: data.address || "",
+          bio: data.bio || "",
+          qualification: data.qualification || "",
+          experience: data.experience || "",
+          specialization: data.specialization || "",
+        })
       } catch (error) {
         console.error("Error fetching profile:", error)
         toast({
           title: "Error",
-          description: "Failed to load profile data. Please try again.",
-          variant: "destructive"
+          description: "Failed to load profile. Please try again.",
+          variant: "destructive",
         })
+      } finally {
         setIsLoading(false)
       }
     }
 
     fetchProfile()
-  }, [toast])
-  
-  const handleProfileUpdate = (e: React.FormEvent) => {
-    e.preventDefault()
+  }, [session, toast])
 
-    // In a real app, you would call an API to update the profile
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been updated successfully."
-    })
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setProfile((prev) => ({ ...prev, [name]: value }))
   }
-  
-  const handlePasswordChange = (e: React.FormEvent) => {
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setPasswords((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
+    if (!session?.user?.id) return
+
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/users/${session.user.id}/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(profile),
+      })
+
+      if (!response.ok) throw new Error("Failed to update profile")
+
       toast({
-        title: "Password Mismatch",
-        description: "New password and confirm password do not match.",
-        variant: "destructive"
+        title: "Success",
+        description: "Profile updated successfully",
+      })
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!session?.user?.id) return
+
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match",
+        variant: "destructive",
       })
       return
     }
 
-    // In a real app, you would call an API to change the password
-    toast({
-      title: "Password Changed",
-      description: "Your password has been changed successfully."
-    })
+    setIsChangingPassword(true)
+    try {
+      const response = await fetch(`/api/users/${session.user.id}/password`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: passwords.currentPassword,
+          newPassword: passwords.newPassword,
+        }),
+      })
 
-    // Reset form
-    setPasswordData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: ""
-    })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to change password")
+      }
+
+      toast({
+        title: "Success",
+        description: "Password changed successfully",
+      })
+
+      setPasswords({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      })
+    } catch (error: any) {
+      console.error("Error changing password:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change password. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsChangingPassword(false)
+    }
   }
-  
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setProfileData(prev => ({ ...prev, [name]: value }))
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
-  
-  const handlePasswordChange2 = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setPasswordData(prev => ({ ...prev, [name]: value }))
-  }
-  
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
-        <p className="text-muted-foreground">
-          Manage your profile information and account settings
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">Profile Settings</h1>
+        <p className="text-muted-foreground">Manage your account settings and preferences</p>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-6">
-          <Card className="animate-pulse">
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-4">
-                <div className="h-24 w-24 rounded-full bg-muted"></div>
+      <Tabs defaultValue="profile">
+        <TabsList>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="password">Password</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>Update your personal information</CardDescription>
+            </CardHeader>
+            <form onSubmit={handleProfileSubmit}>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input id="name" name="name" value={profile.name} onChange={handleProfileChange} required />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={profile.email}
+                      onChange={handleProfileChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" name="phone" value={profile.phone} onChange={handleProfileChange} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Address</Label>
+                    <Input id="address" name="address" value={profile.address} onChange={handleProfileChange} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="qualification">Qualification</Label>
+                    <Input
+                      id="qualification"
+                      name="qualification"
+                      value={profile.qualification}
+                      onChange={handleProfileChange}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="experience">Years of Experience</Label>
+                    <Input
+                      id="experience"
+                      name="experience"
+                      value={profile.experience}
+                      onChange={handleProfileChange}
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="specialization">Specialization</Label>
+                    <Input
+                      id="specialization"
+                      name="specialization"
+                      value={profile.specialization}
+                      onChange={handleProfileChange}
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="bio">Bio</Label>
+                    <Input id="bio" name="bio" value={profile.bio} onChange={handleProfileChange} />
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="password" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your password</CardDescription>
+            </CardHeader>
+            <form onSubmit={handlePasswordSubmit}>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <div className="h-6 w-48 rounded bg-muted"></div>
-                  <div className="h-4 w-32 rounded bg-muted"></div>
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type="password"
+                    value={passwords.currentPassword}
+                    onChange={handlePasswordChange}
+                    required
+                  />
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="h-4 w-full rounded bg-muted"></div>
-                <div className="h-4 w-full rounded bg-muted"></div>
-                <div className="h-4 w-3/4 rounded bg-muted"></div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-24 rounded bg-muted"></div>
-                  ))}
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <Input
+                    id="newPassword"
+                    name="newPassword"
+                    type="password"
+                    value={passwords.newPassword}
+                    onChange={handlePasswordChange}
+                    required
+                  />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="animate-pulse">
-            <CardHeader>
-              <div className="h-6 w-32 rounded bg-muted"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="h-4 w-20 rounded bg-muted"></div>
-                    <div className="h-10 w-full rounded bg-muted"></div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-4 w-20 rounded bg-muted"></div>
-                    <div className="h-10 w-full rounded bg-muted"></div>
-                  </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    value={passwords.confirmPassword}
+                    onChange={handlePasswordChange}
+                    required
+                  />
                 </div>
-              </div>
-            </CardContent>
+              </CardContent>
+              <CardFooter>
+                <Button type="submit" disabled={isChangingPassword}>
+                  {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Change Password
+                </Button>
+              </CardFooter>
+            </form>
           </Card>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-1">
-            <CardHeader>
-              <CardTitle>Profile Picture</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <Avatar className="h-32 w-32">
-                <AvatarImage src="/placeholder.svg?height=128&width=128" alt="Profile picture" />
-                <AvatarFallback>{profileData.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-
-              <Button variant="outline" className="mt-4">
-                Change Picture
-              </Button>
-
-              <div className="mt-6 text-center">
-                <h3 className="font-medium text-lg">{profileData.name}</h3>
-                <p className="text-muted-foreground">{profileData.email}</p>
-                <p className="text-sm text-muted-foreground mt-1">{teacherData.department} Teacher</p>
-                
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center justify-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{profileData.phone}</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{profileData.email}</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{profileData.qualification}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Account Settings</CardTitle>
-              <CardDescription>Update your profile information and password</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="profile">
-                <TabsList className="mb-6">
-                  <TabsTrigger value="profile">Profile</TabsTrigger>
-                  <TabsTrigger value="password">Password</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="profile">
-                  <form onSubmit={handleProfileUpdate} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Full Name</Label>
-                        <Input
-                          id="name"
-                          name="name"
-                          value={profileData.name}
-                          onChange={handleProfileChange}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          name="email"
-                          type="email"
-                          value={profileData.email}
-                          onChange={handleProfileChange}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input
-                          id="phone"
-                          name="phone"
-                          value={profileData.phone}
-                          onChange={handleProfileChange}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="department">Department</Label>
-                        <Input
-                          id="department"
-                          name="department"
-                          value={profileData.department}
-                          onChange={handleProfileChange}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="qualification">Qualification</Label>
-                      <Input
-                        id="qualification"
-                        name="qualification"
-                        value={profileData.qualification}
-                        onChange={handleProfileChange}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="bio">Bio</Label>
-                      <Textarea
-                        id="bio"
-                        name="bio"
-                        value={profileData.bio}
-                        onChange={handleProfileChange}
-                        rows={4}
-                        placeholder="Tell us about yourself"
-                      />
-                    </div>
-
-                    <Button type="submit">Save Changes</Button>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="password">
-                  <form onSubmit={handlePasswordChange} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">Current Password</Label>
-                      <Input
-                        id="currentPassword"
-                        name="currentPassword"
-                        type="password"
-                        value={passwordData.currentPassword}
-                        onChange={handlePasswordChange2}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <Input
-                        id="newPassword"
-                        name="newPassword"
-                        type="password"
-                        value={passwordData.newPassword}
-                        onChange={handlePasswordChange2}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type="password"
-                        value={passwordData.confirmPassword}
-                        onChange={handlePasswordChange2}
-                      />
-                    </div>
-
-                    <Button type="submit">Change Password</Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <CardTitle>Teaching Statistics</CardTitle>
-              <CardDescription>Overview of your teaching activities</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <Card className="bg-blue-50">
-                  <CardContent className="p-6 flex flex-col items-center justify-center text-center">
-                    <Users className="h-8 w-8 text-blue-600 mb-2" />
-                    <p className="text-2xl font-bold text-blue-700">{teacherData.statistics.totalStudents}</p>
-                    <p className="text-sm text-blue-600">Total Students</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-green-50">
-                  <CardContent className="p-6 flex flex-col items-center justify-center text-center">
-                    <BookOpen className="h-8 w-8 text-green-600 mb-2" />
-                    <p className="text-2xl font-bold text-green-700">{teacherData.classes.length}</p>
-                    <p className="text-sm text-green-600">Classes</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-purple-50">
-                  <CardContent className="p-6 flex flex-col items-center justify-center text-center">
-                    <Clock className="h-8 w-8 text-purple-600 mb-2" />
-                    <p className="text-2xl font-bold text-purple-700">{teacherData.statistics.classesPerWeek}</p>
-                    <p className="text-sm text-purple-600">Hours per Week</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-orange-50">
-                  <CardContent className="p-6 flex flex-col items-center justify-center text-center">
-                    <Activity className="h-8 w-8 text-orange-600 mb-2" />
-                    <p className="text-2xl font-bold text-orange-700">{teacherData.statistics.averageAttendance}</p>
-                    <p className="text-sm text-orange-600">Avg. Attendance</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="mt-6 border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="p-2 text-left font-medium">Class Name</th>
-                      <th className="p-2 text-left font-medium">Students</th>
-                      <th className="p-2 text-left font-medium">Schedule</th>
-                      <th className="p-2 text-left font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teacherData.classes.map((cls: any) => (
-                      <tr key={cls.id} className="border-t">
-                        <td className="p-2 font-medium">{cls.name}</td>
-                        <td className="p-2">{cls.studentsCount} students</td>
-                        <td className="p-2">View Schedule</td>
-                        <td className="p-2">
-                          <Button variant="outline" size="sm">View Class</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
+

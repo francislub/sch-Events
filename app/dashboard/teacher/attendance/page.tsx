@@ -15,9 +15,9 @@ export default function TeacherAttendance() {
   const { toast } = useToast()
 
   const [filter, setFilter] = useState({
-    class: "",
+    class: "all",
     date: "",
-    status: "",
+    status: "all",
     search: "",
   })
 
@@ -53,7 +53,7 @@ export default function TeacherAttendance() {
       try {
         let url = "/api/attendance/teacher?"
 
-        if (filter.class) {
+        if (filter.class && filter.class !== "all") {
           url += `classId=${filter.class}&`
         }
 
@@ -61,7 +61,7 @@ export default function TeacherAttendance() {
           url += `date=${filter.date}&`
         }
 
-        if (filter.status) {
+        if (filter.status && filter.status !== "all") {
           url += `status=${filter.status}&`
         }
 
@@ -72,7 +72,7 @@ export default function TeacherAttendance() {
         const response = await fetch(url)
         if (!response.ok) throw new Error("Failed to fetch attendance records")
         const data = await response.json()
-        setAttendance(data)
+        setAttendance(Array.isArray(data) ? data : [])
       } catch (error) {
         console.error("Error fetching attendance:", error)
         toast({
@@ -80,6 +80,7 @@ export default function TeacherAttendance() {
           description: "Failed to load attendance records. Please try again.",
           variant: "destructive",
         })
+        setAttendance([])
       } finally {
         setIsLoading(false)
       }
@@ -153,7 +154,7 @@ export default function TeacherAttendance() {
                   <SelectValue placeholder="All Classes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Classes</SelectItem>
+                  <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((cls) => (
                     <SelectItem key={cls.id} value={cls.id}>
                       {cls.name}
@@ -174,7 +175,7 @@ export default function TeacherAttendance() {
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="Present">Present</SelectItem>
                   <SelectItem value="Absent">Absent</SelectItem>
                   <SelectItem value="Late">Late</SelectItem>
