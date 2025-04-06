@@ -1,271 +1,300 @@
 "use server"
 
-import { db } from "@/lib/db"
+import { revalidatePath } from "next/cache"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
+import { db } from "@/lib/db"
 import { z } from "zod"
 
-// Define validation schema
+// Schema for grade validation
 const gradeSchema = z.object({
-  subject: z.string().min(1, { message: "Subject is required" }),
-  term: z.string().min(1, { message: "Term is required" }),
-  score: z.number().min(0).max(100, { message: "Score must be between 0 and 100" }),
-  grade: z.string().min(1, { message: "Grade is required" }),
+  subject: z.string().min(1, "Subject is required"),
+  term: z.string().min(1, "Term is required"),
+  score: z.string().refine((val) => {
+    const num = Number.parseFloat(val)
+    return !isNaN(num) && num >= 0 && num <= 100
+  }, "Score must be a number between 0 and 100"),
+  grade: z.string().min(1, "Grade is required"),
   remarks: z.string().optional(),
-  studentId: z.string().min(1, { message: "Student ID is required" }),
+  studentId: z.string().min(1, "Student is required"),
 })
 
 export async function addGrade(formData: FormData) {
-  // Check authentication
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    return {
-      success: false,
-      errors: {
-        _form: ["You must be logged in to add grades"],
-      },
-    }
-  }
-
-  // Only teachers and admins can add grades
-  if (session.user.role !== "TEACHER" && session.user.role !== "ADMIN") {
-    return {
-      success: false,
-      errors: {
-        _form: ["You do not have permission to add grades"],
-      },
-    }
-  }
-
-  // Extract and validate form data
-  const rawData = {
-    subject: formData.get("subject") as string,
-    term: formData.get("term") as string,
-    score: Number.parseFloat(formData.get("score") as string),
-    grade: formData.get("grade") as string,
-    remarks: formData.get("remarks") as string,
-    studentId: formData.get("studentId") as string,
-  }
-
-  // Validate data
-  const validationResult = gradeSchema.safeParse(rawData)
-
-  if (!validationResult.success) {
-    return {
-      success: false,
-      errors: validationResult.error.flatten().fieldErrors,
-    }
-  }
-
   try {
-    // If teacher, verify they teach the student
-    if (session.user.role === "TEACHER") {
-      const teacher = await db.teacher.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-        include: {
-          classes: {
-            include: {
-              students: {
-                where: {
-                  id: rawData.studentId,
-                },
-              },
-            },
-          },
-        },
-      })
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return { success: false, errors: { _form: ["Not authenticated"] } }
+    }
 
-      if (!teacher) {
-        return {
-          success: false,
-          errors: {
-            _form: ["Teacher profile not found"],
-          },
-        }
+    // Only teachers can add grades
+    if (session.user.role !== "TEACHER") {
+      return { success: false, errors: { _form: ["Not authorized"] } }
+    }
+
+    // Validate form data
+    const validatedFields = gradeSchema.safeParse({
+      subject: formData.get("subject"),
+      term: formData.get("term"),
+      score: formData.get("score"),
+      grade: formData.get("grade"),
+      remarks: formData.get("remarks"),
+      studentId: formData.get("studentId"),
+    })
+
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        errors: validatedFields.error.flatten().fieldErrors,
       }
+    }
 
-      // Check if student is in one of the teacher's classes
-      const hasStudent = teacher.classes.some((cls) => cls.students.some((student) => student.id === rawData.studentId))
+    const { subject, term, score, grade, remarks, studentId } = validatedFields.data
 
-      if (!hasStudent) {
-        return {
-          success: false,
-          errors: {
-            _form: ["You are not authorized to grade this student"],
-          },
-        }
-      }
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
+      where: {
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return { success: false, errors: { _form: ["Teacher profile not found"] } }
+    }
+
+    // Verify student exists and belongs to a class taught by this teacher
+    const student = await db.student.findFirst({
+      where: {
+        id: studentId,
+        class: {
+          teacherId: teacher.id,
+        },
+      },
+    })
+
+    if (!student) {
+      return { success: false, errors: { _form: ["Student not found or not in your class"] } }
     }
 
     // Create grade
     await db.grade.create({
       data: {
-        subject: rawData.subject,
-        term: rawData.term,
-        score: rawData.score,
-        grade: rawData.grade,
-        remarks: rawData.remarks,
-        studentId: rawData.studentId,
+        subject,
+        term,
+        score: Number.parseFloat(score),
+        grade,
+        remarks: remarks || "",
+        studentId,
       },
     })
 
     // Revalidate paths
     revalidatePath("/dashboard/teacher/grades")
-    revalidatePath("/dashboard/admin/grades")
-    revalidatePath("/dashboard/parent/academics")
+    revalidatePath(`/dashboard/teacher/students/${studentId}`)
+    revalidatePath(`/dashboard/student/academics`)
 
-    return {
-      success: true,
-      message: "Grade added successfully",
-    }
+    return { success: true }
   } catch (error) {
     console.error("Error adding grade:", error)
-    return {
-      success: false,
-      errors: {
-        _form: ["Something went wrong. Please try again."],
-      },
-    }
+    return { success: false, errors: { _form: ["Failed to add grade"] } }
   }
 }
 
-export async function getStudentGrades(studentId: string, term?: string) {
-  // Check authentication
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    return {
-      success: false,
-      errors: {
-        _form: ["You must be logged in to view grades"],
-      },
-    }
-  }
-
+export async function getGradesByStudent(studentId: string) {
   try {
-    // Build filter
-    const filter: any = {
-      studentId,
-    }
-
-    if (term) {
-      filter.term = term
-    }
-
-    // If parent, verify the student is their child
-    if (session.user.role === "PARENT") {
-      const parent = await db.parent.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-        include: {
-          children: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      })
-
-      if (!parent) {
-        return {
-          success: false,
-          errors: {
-            _form: ["Parent profile not found"],
-          },
-        }
-      }
-
-      const childrenIds = parent.children.map((child) => child.id)
-
-      if (!childrenIds.includes(studentId)) {
-        return {
-          success: false,
-          errors: {
-            _form: ["You are not authorized to view this student's grades"],
-          },
-        }
-      }
-    }
-
-    // If teacher, verify they teach the student
-    if (session.user.role === "TEACHER") {
-      const teacher = await db.teacher.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-        include: {
-          classes: {
-            include: {
-              students: {
-                where: {
-                  id: studentId,
-                },
-              },
-            },
-          },
-        },
-      })
-
-      if (!teacher) {
-        return {
-          success: false,
-          errors: {
-            _form: ["Teacher profile not found"],
-          },
-        }
-      }
-
-      // Check if student is in one of the teacher's classes
-      const hasStudent = teacher.classes.some((cls) => cls.students.some((student) => student.id === studentId))
-
-      if (!hasStudent) {
-        return {
-          success: false,
-          errors: {
-            _form: ["You are not authorized to view this student's grades"],
-          },
-        }
-      }
-    }
-
-    // Get grades
     const grades = await db.grade.findMany({
-      where: filter,
-      orderBy: {
-        subject: "asc",
-      },
-    })
-
-    // Get student info
-    const student = await db.student.findUnique({
       where: {
-        id: studentId,
+        studentId,
       },
-      include: {
-        class: true,
+      orderBy: {
+        createdAt: "desc",
       },
     })
 
-    return {
-      success: true,
-      data: {
-        grades,
-        student,
-      },
-    }
+    return { success: true, data: grades }
   } catch (error) {
     console.error("Error fetching grades:", error)
-    return {
-      success: false,
-      errors: {
-        _form: ["Something went wrong. Please try again."],
+    return { success: false, error: "Failed to fetch grades" }
+  }
+}
+
+export async function getGradeById(gradeId: string) {
+  try {
+    const grade = await db.grade.findUnique({
+      where: {
+        id: gradeId,
       },
+      include: {
+        student: true,
+      },
+    })
+
+    if (!grade) {
+      return { success: false, error: "Grade not found" }
     }
+
+    return { success: true, data: grade }
+  } catch (error) {
+    console.error("Error fetching grade:", error)
+    return { success: false, error: "Failed to fetch grade" }
+  }
+}
+
+export async function updateGrade(gradeId: string, formData: FormData) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return { success: false, errors: { _form: ["Not authenticated"] } }
+    }
+
+    // Only teachers can update grades
+    if (session.user.role !== "TEACHER") {
+      return { success: false, errors: { _form: ["Not authorized"] } }
+    }
+
+    // Validate form data
+    const validatedFields = gradeSchema.safeParse({
+      subject: formData.get("subject"),
+      term: formData.get("term"),
+      score: formData.get("score"),
+      grade: formData.get("grade"),
+      remarks: formData.get("remarks"),
+      studentId: formData.get("studentId"),
+    })
+
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        errors: validatedFields.error.flatten().fieldErrors,
+      }
+    }
+
+    const { subject, term, score, grade, remarks, studentId } = validatedFields.data
+
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
+      where: {
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return { success: false, errors: { _form: ["Teacher profile not found"] } }
+    }
+
+    // Verify student exists and belongs to a class taught by this teacher
+    const student = await db.student.findFirst({
+      where: {
+        id: studentId,
+        class: {
+          teacherId: teacher.id,
+        },
+      },
+    })
+
+    if (!student) {
+      return { success: false, errors: { _form: ["Student not found or not in your class"] } }
+    }
+
+    // Verify grade exists and belongs to this student
+    const existingGrade = await db.grade.findFirst({
+      where: {
+        id: gradeId,
+        studentId,
+      },
+    })
+
+    if (!existingGrade) {
+      return { success: false, errors: { _form: ["Grade not found or not for this student"] } }
+    }
+
+    // Update grade
+    await db.grade.update({
+      where: {
+        id: gradeId,
+      },
+      data: {
+        subject,
+        term,
+        score: Number.parseFloat(score),
+        grade,
+        remarks: remarks || "",
+      },
+    })
+
+    // Revalidate paths
+    revalidatePath("/dashboard/teacher/grades")
+    revalidatePath(`/dashboard/teacher/grades/${gradeId}`)
+    revalidatePath(`/dashboard/teacher/students/${studentId}`)
+    revalidatePath(`/dashboard/student/academics`)
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating grade:", error)
+    return { success: false, errors: { _form: ["Failed to update grade"] } }
+  }
+}
+
+export async function deleteGrade(gradeId: string) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return { success: false, error: "Not authenticated" }
+    }
+
+    // Only teachers can delete grades
+    if (session.user.role !== "TEACHER") {
+      return { success: false, error: "Not authorized" }
+    }
+
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
+      where: {
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return { success: false, error: "Teacher profile not found" }
+    }
+
+    // Verify grade exists and belongs to a student in a class taught by this teacher
+    const grade = await db.grade.findFirst({
+      where: {
+        id: gradeId,
+        student: {
+          class: {
+            teacherId: teacher.id,
+          },
+        },
+      },
+      include: {
+        student: true,
+      },
+    })
+
+    if (!grade) {
+      return { success: false, error: "Grade not found or not for a student in your class" }
+    }
+
+    // Delete grade
+    await db.grade.delete({
+      where: {
+        id: gradeId,
+      },
+    })
+
+    // Revalidate paths
+    revalidatePath("/dashboard/teacher/grades")
+    revalidatePath(`/dashboard/teacher/students/${grade.student.id}`)
+    revalidatePath(`/dashboard/student/academics`)
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error deleting grade:", error)
+    return { success: false, error: "Failed to delete grade" }
   }
 }
 

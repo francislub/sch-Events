@@ -83,22 +83,45 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Adjust the query based on your actual Prisma schema
+    // Since your Grade model has different fields, we need to adapt the query
     const grades = await db.grade.findMany({
-      where: whereClause,
+      where: {
+        student: {
+          class: {
+            teacherId: teacher.id,
+          },
+        },
+      },
       include: {
         student: true,
-        class: true,
-        subject: true,
-        term: true,
       },
       orderBy: {
         createdAt: "desc",
       },
     })
 
-    return NextResponse.json(grades)
+    // Format the response to match the expected structure in the frontend
+    const formattedGrades = grades.map((grade) => ({
+      id: grade.id,
+      subject: grade.subject,
+      term: grade.term,
+      score: grade.score,
+      letterGrade: grade.grade,
+      remarks: grade.remarks,
+      student: {
+        firstName: grade.student.firstName,
+        lastName: grade.student.lastName,
+      },
+      class: {
+        name: grade.student.grade + "-" + grade.student.section,
+      },
+    }))
+
+    return NextResponse.json(formattedGrades)
   } catch (error) {
-    console.error("Error fetching teacher grades:", error)
+    // Fix the error handling to avoid the TypeError
+    console.error("Error fetching teacher grades:", error instanceof Error ? error.message : "Unknown error")
     return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
     })

@@ -24,6 +24,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
+    // Verify the student exists
+    const student = await db.student.findUnique({
+      where: {
+        id: studentId,
+      },
+    })
+
+    if (!student) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 })
+    }
+
     // If teacher, verify they teach the student
     if (session.user.role === "TEACHER") {
       const teacher = await db.teacher.findUnique({
@@ -208,9 +219,7 @@ export async function GET(req: Request) {
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ subject: "asc" }, { createdAt: "desc" }],
       skip,
       take: limit,
     })
@@ -220,8 +229,12 @@ export async function GET(req: Request) {
       where: filter,
     })
 
-    // Return the grades array directly to fix the "grades.map is not a function" error
-    return NextResponse.json(grades)
+    return NextResponse.json({
+      grades,
+      totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit),
+    })
   } catch (error) {
     console.error("Error fetching grades:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })

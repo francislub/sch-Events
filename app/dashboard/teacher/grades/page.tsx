@@ -24,8 +24,32 @@ export default function TeacherGrades() {
   const [grades, setGrades] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [classes, setClasses] = useState<any[]>([])
-  const [subjects, setSubjects] = useState<any[]>([])
-  const [terms, setTerms] = useState<any[]>([])
+
+  // Define subjects directly in the component
+  const subjects = [
+    "Mathematics",
+    "English Language",
+    "Science",
+    "Social Studies",
+    "History",
+    "Geography",
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Computer Science",
+    "Information Technology",
+    "Art",
+    "Music",
+    "Physical Education",
+    "Foreign Language",
+    "Economics",
+    "Business Studies",
+    "Religious Studies",
+    "Civics",
+    "Environmental Science",
+  ]
+
+  const terms = ["Term 1", "Term 2", "Term 3", "Final"]
 
   // Fetch classes taught by the teacher
   useEffect(() => {
@@ -48,28 +72,6 @@ export default function TeacherGrades() {
     fetchClasses()
   }, [toast])
 
-  // Fetch subjects and terms
-  useEffect(() => {
-    const fetchSubjectsAndTerms = async () => {
-      try {
-        const response = await fetch("/api/subjects")
-        if (!response.ok) throw new Error("Failed to fetch subjects")
-        const data = await response.json()
-        setSubjects(data.subjects || [])
-        setTerms(data.terms || [])
-      } catch (error) {
-        console.error("Error fetching subjects and terms:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load subjects and terms. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-
-    fetchSubjectsAndTerms()
-  }, [toast])
-
   // Fetch grades
   useEffect(() => {
     const fetchGrades = async () => {
@@ -82,7 +84,7 @@ export default function TeacherGrades() {
         }
 
         if (filter.subject && filter.subject !== "all") {
-          url += `subjectId=${filter.subject}&`
+          url += `subject=${filter.subject}&`
         }
 
         if (filter.term && filter.term !== "all") {
@@ -94,7 +96,11 @@ export default function TeacherGrades() {
         }
 
         const response = await fetch(url)
-        if (!response.ok) throw new Error("Failed to fetch grades")
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Failed to fetch grades")
+        }
+
         const data = await response.json()
         setGrades(Array.isArray(data) ? data : [])
       } catch (error) {
@@ -173,7 +179,7 @@ export default function TeacherGrades() {
                   <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((cls) => (
                     <SelectItem key={cls.id} value={cls.id}>
-                      {cls.name}
+                      {cls.name || `${cls.grade}-${cls.section}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -186,8 +192,8 @@ export default function TeacherGrades() {
                 <SelectContent>
                   <SelectItem value="all">All Subjects</SelectItem>
                   {subjects.map((subject) => (
-                    <SelectItem key={subject.id} value={subject.id}>
-                      {subject.name}
+                    <SelectItem key={subject} value={subject}>
+                      {subject}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -200,8 +206,8 @@ export default function TeacherGrades() {
                 <SelectContent>
                   <SelectItem value="all">All Terms</SelectItem>
                   {terms.map((term) => (
-                    <SelectItem key={term.id} value={term.id}>
-                      {term.name}
+                    <SelectItem key={term} value={term}>
+                      {term}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -235,8 +241,8 @@ export default function TeacherGrades() {
                       <tr key={grade.id} className="border-t">
                         <td className="p-2">{`${grade.student.firstName} ${grade.student.lastName}`}</td>
                         <td className="p-2">{grade.class.name}</td>
-                        <td className="p-2">{grade.subject.name}</td>
-                        <td className="p-2">{grade.term.name}</td>
+                        <td className="p-2">{grade.subject}</td>
+                        <td className="p-2">{grade.term}</td>
                         <td className="p-2">{grade.score}</td>
                         <td className="p-2">
                           <span
