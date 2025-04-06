@@ -3,36 +3,21 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-// GET messages
+// GET messages for the current user
 export async function GET(req: Request) {
   try {
-    // Check authentication
     const session = await getServerSession(authOptions)
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const contactId = searchParams.get("contactId")
+    const userId = session.user.id
 
-    if (!contactId) {
-      return NextResponse.json({ error: "Contact ID is required" }, { status: 400 })
-    }
-
-    // Get messages between current user and contact
+    // Get all messages where the user is either sender or receiver
     const messages = await db.message.findMany({
       where: {
-        OR: [
-          {
-            senderId: session.user.id,
-            receiverId: contactId,
-          },
-          {
-            senderId: contactId,
-            receiverId: session.user.id,
-          },
-        ],
+        OR: [{ senderId: userId }, { receiverId: userId }],
       },
       include: {
         sender: {
@@ -55,47 +40,50 @@ export async function GET(req: Request) {
       },
     })
 
-    // Mark messages as read
-    await db.message.updateMany({
-      where: {
-        senderId: contactId,
-        receiverId: session.user.id,
-        isRead: false,
-      },
-      data: {
-        isRead: true,
-      },
-    })
+    // Format messages for the frontend
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      content: msg.content,
+      senderId: msg.senderId,
+      senderName: msg.sender.name,
+      receiverId: msg.receiverId,
+      receiverName: msg.receiver.name,
+      isRead: msg.isRead,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+      currentUserId: userId, // Add this to help frontend determine message direction
+    }))
 
-    return NextResponse.json(messages)
+    return NextResponse.json(formattedMessages)
   } catch (error) {
-    console.error("Error fetching messages:", error instanceof Error ? error.message : "Unknown error")
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+    console.error("Error fetching messages:", error)
+    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 })
   }
 }
 
-// POST new message
+// POST a new message
 export async function POST(req: Request) {
   try {
-    // Check authentication
     const session = await getServerSession(authOptions)
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { receiverId, content } = await req.json()
+    const { recipientId, content } = await req.json()
 
-    if (!receiverId || !content) {
-      return NextResponse.json({ error: "Receiver ID and content are required" }, { status: 400 })
+    if (!recipientId || !content) {
+      return NextResponse.json({ error: "Recipient ID and content are required" }, { status: 400 })
     }
 
-    // Create new message
+    const senderId = session.user.id
+
+    // Create the message
     const message = await db.message.create({
       data: {
-        senderId: session.user.id,
-        receiverId,
         content,
+        senderId,
+        receiverId: recipientId,
         isRead: false,
       },
       include: {
@@ -103,23 +91,35 @@ export async function POST(req: Request) {
           select: {
             id: true,
             name: true,
-            role: true,
           },
         },
         receiver: {
           select: {
             id: true,
             name: true,
-            role: true,
           },
         },
       },
     })
 
-    return NextResponse.json(message)
+    // Format the message for the frontend
+    const formattedMessage = {
+      id: message.id,
+      content: message.content,
+      senderId: message.senderId,
+      senderName: message.sender.name,
+      receiverId: message.receiverId,
+      receiverName: message.receiver.name,
+      isRead: message.isRead,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
+      currentUserId: senderId,
+    }
+
+    return NextResponse.json(formattedMessage)
   } catch (error) {
-    console.error("Error sending message:", error instanceof Error ? error.message : "Unknown error")
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+    console.error("Error sending message:", error)
+    return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
   }
 }
 

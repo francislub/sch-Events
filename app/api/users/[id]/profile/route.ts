@@ -28,9 +28,13 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         name: true,
         email: true,
         role: true,
-        address: true,
-        bio: true,
-        image: true,
+        createdAt: true,
+        updatedAt: true,
+        // Include related profile based on role
+        teacherProfile: true,
+        parentProfile: true,
+        studentProfile: true,
+        adminProfile: true,
       },
     })
 
@@ -61,7 +65,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { name, address, bio } = await req.json()
+    const { name } = await req.json()
 
     // Update user profile
     const updatedUser = await db.user.update({
@@ -70,17 +74,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       },
       data: {
         name,
-        address,
-        bio,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        address: true,
-        bio: true,
-        image: true,
+        createdAt: true,
+        updatedAt: true,
       },
     })
 

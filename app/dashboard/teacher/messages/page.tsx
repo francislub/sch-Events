@@ -79,7 +79,10 @@ export default function TeacherMessages() {
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to send message")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to send message")
+      }
 
       const newMessage = await response.json()
 
@@ -94,7 +97,7 @@ export default function TeacherMessages() {
       console.error("Error sending message:", error)
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -136,7 +139,8 @@ export default function TeacherMessages() {
                   <SelectContent>
                     {parents.map((parent) => (
                       <SelectItem key={parent.id} value={parent.id}>
-                        {parent.name} - {parent.children.map((child: any) => child.name).join(", ")}
+                        {parent.name} -{" "}
+                        {parent.children.map((child: any) => child.firstName + " " + child.lastName).join(", ")}
                       </SelectItem>
                     ))}
                   </SelectContent>

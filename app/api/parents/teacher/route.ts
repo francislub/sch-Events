@@ -1,19 +1,21 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session || session.user.role !== "TEACHER") {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      })
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Find teacher profile
+    if (session.user.role !== "TEACHER") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // Get the teacher profile
     const teacher = await db.teacher.findUnique({
       where: {
         userId: session.user.id,
@@ -21,78 +23,74 @@ export async function GET(request: NextRequest) {
     })
 
     if (!teacher) {
-      return new NextResponse(JSON.stringify({ error: "Teacher profile not found" }), {
-        status: 404,
-      })
+      return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 })
     }
 
     // Get classes taught by this teacher
-    const teacherClasses = await db.class.findMany({
+    const classes = await db.class.findMany({
       where: {
         teacherId: teacher.id,
       },
-      select: {
-        id: true,
-      },
-    })
-
-    const classIds = teacherClasses.map((c) => c.id)
-
-    // Get students in teacher's classes
-    const students = await db.student.findMany({
-      where: {
-        classId: {
-          in: classIds,
-        },
-      },
       include: {
-        parent: {
+        students: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+            parent: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
               },
             },
           },
         },
-        class: true,
       },
     })
 
-    // Group students by parent
-    const parentMap = new Map()
+    // Extract unique parents
+    const parentsMap = new Map()
 
-    students.forEach((student) => {
-      if (!student.parent) return
+    classes.forEach((cls) => {
+      cls.students.forEach((student) => {
+        if (student.parent && student.parent.user) {
+          const parentId = student.parent.user.id
 
-      const parentId = student.parent.user.id
-      if (!parentMap.has(parentId)) {
-        parentMap.set(parentId, {
-          id: parentId,
-          name: student.parent.user.name,
-          email: student.parent.user.email,
-          children: [],
-        })
-      }
+          if (!parentsMap.has(parentId)) {
+            parentsMap.set(parentId, {
+              id: parentId,
+              name: student.parent.user.name,
+              email: student.parent.user.email,
+              children: [],
+            })
+          }
 
-      parentMap.get(parentId).children.push({
-        id: student.id,
-        name: `${student.firstName} ${student.lastName}`,
-        class: `${student.class.grade}-${student.class.section}`,
+          // Add this student to the parent's children list
+          const parent = parentsMap.get(parentId)
+          const childExists = parent.children.some((child: any) => child.id === student.id)
+
+          if (!childExists) {
+            parent.children.push({
+              id: student.id,
+              firstName: student.firstName,
+              lastName: student.lastName,
+              grade: student.grade,
+              section: student.section,
+            })
+          }
+        }
       })
     })
 
     // Convert map to array
-    const formattedParents = Array.from(parentMap.values())
+    const parents = Array.from(parentsMap.values())
 
-    return NextResponse.json(formattedParents)
+    return NextResponse.json(parents)
   } catch (error) {
-    console.error("Error fetching teacher parents:", error)
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-    })
+    console.error("Error fetching parents:", error)
+    return NextResponse.json({ error: "Failed to fetch parents" }, { status: 500 })
   }
 }
 
