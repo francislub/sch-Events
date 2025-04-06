@@ -44,9 +44,11 @@ export default function TeacherClasses() {
   // Filter classes based on search query
   const filteredClasses = classes.filter((cls) => {
     const className = cls.name.toLowerCase()
+    const grade = cls.grade.toLowerCase()
+    const section = cls.section.toLowerCase()
     const query = searchQuery.toLowerCase()
 
-    return className.includes(query)
+    return className.includes(query) || grade.includes(query) || section.includes(query)
   })
 
   return (
@@ -87,7 +89,9 @@ export default function TeacherClasses() {
                   <Card key={cls.id} className="overflow-hidden">
                     <CardHeader className="bg-muted/50 pb-2">
                       <CardTitle>{cls.name}</CardTitle>
-                      <CardDescription>{cls.section || "No section"}</CardDescription>
+                      <CardDescription>
+                        Grade {cls.grade} - Section {cls.section}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
                       <div className="space-y-2">

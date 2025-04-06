@@ -35,6 +35,7 @@ export async function GET(req: Request) {
       },
       include: {
         students: true,
+        schedule: true,
       },
     })
 
@@ -44,55 +45,40 @@ export async function GET(req: Request) {
     // Get class IDs
     const classIds = classes.map((cls) => cls.id)
 
-    // Get pending assignments to grade
-    const pendingAssignments = await db.assignment.count({
-      where: {
-        classId: {
-          in: classIds,
-        },
-        submissions: {
-          some: {
-            gradedAt: null,
-          },
-        },
-      },
-    })
+    // Get pending grades (simplified since there's no direct assignment model)
+    const pendingGrades = 0
 
     // Get today's schedule
     const today = new Date()
     const dayOfWeek = today.getDay()
-    const schedules = await db.schedule.findMany({
-      where: {
-        classId: {
-          in: classIds,
-        },
-        dayOfWeek: dayOfWeek.toString(),
-      },
-      include: {
-        class: true,
-      },
-      orderBy: {
-        startTime: "asc",
-      },
-    })
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    const todayName = dayNames[dayOfWeek]
 
-    // Format today's schedule
-    const todaySchedule = schedules.map((schedule) => ({
-      time: `${schedule.startTime} - ${schedule.endTime}`,
-      class: schedule.class.name,
-      room: schedule.room,
-    }))
+    // Filter schedules for today
+    const todaySchedules = classes
+      .flatMap((cls) =>
+        cls.schedule
+          .filter((schedule) => schedule.day === todayName)
+          .map((schedule) => ({
+            time: `${schedule.startTime} - ${schedule.endTime}`,
+            class: cls.name,
+            room: schedule.room,
+            subject: schedule.subject,
+          })),
+      )
+      .sort((a, b) => a.time.localeCompare(b.time))
 
-    // Get recent activities (grades, attendance, etc.)
+    // Get recent grades
+    const studentIds = classes.flatMap((cls) => cls.students.map((student) => student.id))
+
     const recentGrades = await db.grade.findMany({
       where: {
-        classId: {
-          in: classIds,
+        studentId: {
+          in: studentIds,
         },
       },
       include: {
         student: true,
-        subject: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -100,15 +86,15 @@ export async function GET(req: Request) {
       take: 3,
     })
 
+    // Get recent attendance
     const recentAttendance = await db.attendance.findMany({
       where: {
-        classId: {
-          in: classIds,
+        studentId: {
+          in: studentIds,
         },
       },
       include: {
         student: true,
-        class: true,
       },
       orderBy: {
         date: "desc",
@@ -120,7 +106,7 @@ export async function GET(req: Request) {
     const recentActivities = [
       ...recentGrades.map((grade) => ({
         action: "Grades Updated",
-        details: `${grade.subject.name} - ${grade.student.firstName} ${grade.student.lastName}`,
+        details: `${grade.subject} - ${grade.student.firstName} ${grade.student.lastName}`,
         time: new Date(grade.createdAt).toLocaleString(),
       })),
       ...recentAttendance.map((attendance) => ({
@@ -135,27 +121,24 @@ export async function GET(req: Request) {
     // Format classes
     const formattedClasses = classes.map((cls) => {
       // Get schedule for this class
-      const classSchedules = schedules.filter((s) => s.classId === cls.id)
-      const scheduleText = classSchedules
-        .map((s) => `${getDayName(Number.parseInt(s.dayOfWeek))} - ${s.startTime}`)
-        .join(", ")
+      const classSchedules = cls.schedule
+      const scheduleText = classSchedules.map((s) => `${s.day} - ${s.startTime}`).join(", ")
 
       return {
         id: cls.id,
         name: cls.name,
+        grade: cls.grade,
+        section: cls.section,
         schedule: scheduleText || "No schedule set",
         room: classSchedules[0]?.room || "Not assigned",
         students: cls.students.length,
       }
     })
 
-    // Get announcements
-    const announcements = await db.announcement.findMany({
+    // Get notifications (using as announcements)
+    const announcements = await db.notification.findMany({
       where: {
-        OR: [{ targetRole: "ALL" }, { targetRole: "TEACHER" }],
-        expiresAt: {
-          gte: new Date(),
-        },
+        forRole: "TEACHER",
       },
       orderBy: {
         createdAt: "desc",
@@ -169,29 +152,29 @@ export async function GET(req: Request) {
       studentName: `${record.student.firstName} ${record.student.lastName}`,
       status: record.status,
       date: new Date(record.date).toLocaleDateString(),
-      class: record.class.name,
+      class: record.student.class?.name || "Unknown",
     }))
 
     return NextResponse.json({
       totalClasses: classes.length,
       totalStudents,
-      pendingGrades: pendingAssignments,
-      upcomingClasses: todaySchedule.length,
-      todaySchedule,
+      pendingGrades,
+      upcomingClasses: todaySchedules.length,
+      todaySchedule: todaySchedules,
       recentActivities,
       classes: formattedClasses,
-      announcements,
+      announcements: announcements.map((a) => ({
+        id: a.id,
+        title: a.title,
+        content: a.message,
+        type: a.type,
+        createdAt: a.createdAt,
+      })),
       recentAttendance: formattedAttendance,
     })
   } catch (error) {
-    console.error("Error fetching teacher dashboard data:", error)
+    console.error("Error fetching teacher dashboard data:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
-}
-
-// Helper function to get day name
-function getDayName(dayNumber: number): string {
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-  return days[dayNumber] || "Unknown"
 }
 

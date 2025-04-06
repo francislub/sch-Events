@@ -38,49 +38,54 @@ export async function GET(request: NextRequest) {
 
     const classIds = teacherClasses.map((c) => c.id)
 
-    // Get parents of students in teacher's classes
-    const parents = await db.parent.findMany({
+    // Get students in teacher's classes
+    const students = await db.student.findMany({
       where: {
-        students: {
-          some: {
-            classId: {
-              in: classIds,
-            },
-          },
+        classId: {
+          in: classIds,
         },
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        students: {
-          where: {
-            classId: {
-              in: classIds,
+        parent: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
             },
           },
-          include: {
-            class: true,
-          },
         },
+        class: true,
       },
     })
 
-    // Format the response
-    const formattedParents = parents.map((parent) => ({
-      id: parent.user.id,
-      name: parent.user.name,
-      email: parent.user.email,
-      children: parent.students.map((student) => ({
+    // Group students by parent
+    const parentMap = new Map()
+
+    students.forEach((student) => {
+      if (!student.parent) return
+
+      const parentId = student.parent.user.id
+      if (!parentMap.has(parentId)) {
+        parentMap.set(parentId, {
+          id: parentId,
+          name: student.parent.user.name,
+          email: student.parent.user.email,
+          children: [],
+        })
+      }
+
+      parentMap.get(parentId).children.push({
         id: student.id,
         name: `${student.firstName} ${student.lastName}`,
-        class: student.class ? student.class.name : "N/A",
-      })),
-    }))
+        class: `${student.class.grade}-${student.class.section}`,
+      })
+    })
+
+    // Convert map to array
+    const formattedParents = Array.from(parentMap.values())
 
     return NextResponse.json(formattedParents)
   } catch (error) {

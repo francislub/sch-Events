@@ -33,18 +33,30 @@ export async function GET(request: NextRequest) {
       },
       include: {
         students: true,
-        subjects: true,
+        schedule: true,
       },
     })
 
     // Format the response
-    const formattedClasses = classes.map((cls) => ({
-      id: cls.id,
-      name: cls.name,
-      section: cls.section,
-      studentCount: cls.students.length,
-      subjects: cls.subjects.map((subject) => subject.name),
-    }))
+    const formattedClasses = classes.map((cls) => {
+      // Get subjects from schedule
+      const subjects = [...new Set(cls.schedule.map((s) => s.subject))]
+
+      return {
+        id: cls.id,
+        name: cls.name,
+        grade: cls.grade,
+        section: cls.section,
+        studentCount: cls.students.length,
+        subjects: subjects,
+        schedule: cls.schedule.map((s) => ({
+          day: s.day,
+          time: `${s.startTime} - ${s.endTime}`,
+          room: s.room,
+          subject: s.subject,
+        })),
+      }
+    })
 
     return NextResponse.json(formattedClasses)
   } catch (error) {

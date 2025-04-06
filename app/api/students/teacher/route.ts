@@ -17,8 +17,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const classId = searchParams.get("classId")
+    // Get URL parameters
+    const url = new URL(req.url)
+    const classId = url.searchParams.get("classId")
+    const searchTerm = url.searchParams.get("search") || ""
 
     // Find teacher profile
     const teacher = await db.teacher.findUnique({
@@ -38,26 +40,47 @@ export async function GET(req: Request) {
       },
       select: {
         id: true,
+        name: true,
+        grade: true,
+        section: true,
       },
     })
 
+    // If no classes found, return empty array
+    if (classes.length === 0) {
+      return NextResponse.json({ students: [], classes: [] })
+    }
+
+    // Get class IDs
     const classIds = classes.map((cls) => cls.id)
 
-    // Build filter
-    const filter: any = {
+    // Build where clause for students query
+    let whereClause: any = {
       classId: {
         in: classIds,
       },
     }
 
-    // If specific class is requested, filter by that class
-    if (classId) {
-      filter.classId = classId
+    // Add class filter if provided
+    if (classId && classId !== "all") {
+      whereClause.classId = classId
+    }
+
+    // Add search filter if provided
+    if (searchTerm) {
+      whereClause = {
+        ...whereClause,
+        OR: [
+          { firstName: { contains: searchTerm, mode: "insensitive" } },
+          { lastName: { contains: searchTerm, mode: "insensitive" } },
+          { admissionNumber: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      }
     }
 
     // Get students in these classes
     const students = await db.student.findMany({
-      where: filter,
+      where: whereClause,
       include: {
         class: true,
         parent: {
@@ -72,16 +95,46 @@ export async function GET(req: Request) {
         },
         user: {
           select: {
-            id: true,
             email: true,
           },
         },
       },
+      orderBy: {
+        lastName: "asc",
+      },
     })
 
-    return NextResponse.json(students)
+    // Format students for response
+    const formattedStudents = students.map((student) => ({
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      name: `${student.firstName} ${student.lastName}`,
+      email: student.user?.email || "",
+      admissionNumber: student.admissionNumber,
+      grade: student.grade,
+      gender: student.gender,
+      class: {
+        id: student.class.id,
+        name: student.class.name,
+        grade: student.class.grade,
+        section: student.class.section,
+      },
+      parent: student.parent
+        ? {
+            id: student.parent.id,
+            name: student.parent.user.name,
+            email: student.parent.user.email,
+          }
+        : null,
+    }))
+
+    return NextResponse.json({
+      students: formattedStudents,
+      classes,
+    })
   } catch (error) {
-    console.error("Error fetching teacher students:", error)
+    console.error("Error fetching teacher students:", error instanceof Error ? error.message : "Unknown error")
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }

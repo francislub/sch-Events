@@ -184,15 +184,20 @@ export default function TeacherMessages() {
                 </p>
               ) : (
                 messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.isFromMe ? "justify-end" : "justify-start"}`}>
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.senderId === msg.currentUserId ? "justify-end" : "justify-start"}`}
+                  >
                     <div
                       className={`max-w-[80%] rounded-lg p-3 ${
-                        msg.isFromMe ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"
+                        msg.senderId === msg.currentUserId ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <User className="h-4 w-4" />
-                        <span className="font-medium">{msg.isFromMe ? "You" : msg.senderName}</span>
+                        <span className="font-medium">
+                          {msg.senderId === msg.currentUserId ? "You" : msg.senderName}
+                        </span>
                         <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                       </div>
                       <p>{msg.content}</p>

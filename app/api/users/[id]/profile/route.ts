@@ -28,10 +28,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         name: true,
         email: true,
         role: true,
-        // Remove phone field as it doesn't exist in the schema
-        // address: true,
-        // bio: true,
-        // image: true,
+        address: true,
+        bio: true,
+        image: true,
       },
     })
 
@@ -62,7 +61,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { name } = await req.json()
+    const { name, address, bio } = await req.json()
 
     // Update user profile
     const updatedUser = await db.user.update({
@@ -71,19 +70,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       },
       data: {
         name,
-        // Remove phone field as it doesn't exist in the schema
-        // address,
-        // bio,
+        address,
+        bio,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        // Remove phone field as it doesn't exist in the schema
-        // address: true,
-        // bio: true,
-        // image: true,
+        address: true,
+        bio: true,
+        image: true,
       },
     })
 
