@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { markAttendance } from "@/app/actions/attendance-actions"
+import { markBulkAttendance } from "@/app/actions/attendance-actions"
 
 export default function MarkAttendance() {
   const router = useRouter()
@@ -24,54 +24,88 @@ export default function MarkAttendance() {
   const [students, setStudents] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [attendanceData, setAttendanceData] = useState<Record<string, string>>({})
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true)
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Mock data for classes
+  // Fetch classes taught by the teacher
   useEffect(() => {
-    // In a real app, you would fetch this data from your API
-    setClasses([
-      { id: "1", name: "10A" },
-      { id: "2", name: "10B" },
-      { id: "3", name: "9A" },
-      { id: "4", name: "9B" },
-    ])
-  }, [])
+    const fetchClasses = async () => {
+      try {
+        setIsLoadingClasses(true)
+        setError(null)
 
-  // Load students when class is selected
-  useEffect(() => {
-    if (formData.classId) {
-      setIsLoading(true)
+        const response = await fetch("/api/classes/teacher")
 
-      // In a real app, you would fetch students for the selected class
-      setTimeout(() => {
-        const mockStudents = [
-          { id: "1", firstName: "Sarah", lastName: "Doe", grade: "10", section: "A" },
-          { id: "2", firstName: "Michael", lastName: "Smith", grade: "10", section: "A" },
-          { id: "3", firstName: "Emily", lastName: "Johnson", grade: "9", section: "B" },
-          { id: "4", firstName: "David", lastName: "Wilson", grade: "10", section: "B" },
-          { id: "5", firstName: "Jessica", lastName: "Brown", grade: "10", section: "A" },
-        ].filter((student) => {
-          const selectedClass = classes.find((c) => c.id === formData.classId)
-          return selectedClass && `${student.grade}${student.section}` === selectedClass.name
+        if (!response.ok) {
+          throw new Error("Failed to fetch classes")
+        }
+
+        const data = await response.json()
+        setClasses(data)
+      } catch (err) {
+        console.error("Error fetching classes:", err)
+        setError("Failed to load classes. Please try again.")
+        toast({
+          title: "Error",
+          description: "Failed to load classes. Please try again.",
+          variant: "destructive",
         })
+      } finally {
+        setIsLoadingClasses(false)
+      }
+    }
 
-        setStudents(mockStudents)
+    fetchClasses()
+  }, [toast])
+
+  // Fetch students when class is selected
+  useEffect(() => {
+    if (!formData.classId) {
+      setStudents([])
+      setAttendanceData({})
+      return
+    }
+
+    const fetchStudents = async () => {
+      try {
+        setIsLoadingStudents(true)
+        setError(null)
+
+        const response = await fetch(`/api/students/class/${formData.classId}`)
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch students")
+        }
+
+        const data = await response.json()
+        setStudents(data.students)
 
         // Initialize attendance data
         const initialAttendance: Record<string, string> = {}
-        mockStudents.forEach((student) => {
+        data.students.forEach((student: any) => {
           initialAttendance[student.id] = "Present"
         })
 
         setAttendanceData(initialAttendance)
-        setIsLoading(false)
-      }, 500)
-    } else {
-      setStudents([])
-      setAttendanceData({})
+      } catch (err) {
+        console.error("Error fetching students:", err)
+        setError("Failed to load students. Please try again.")
+        toast({
+          title: "Error",
+          description: "Failed to load students. Please try again.",
+          variant: "destructive",
+        })
+        setStudents([])
+        setAttendanceData({})
+      } finally {
+        setIsLoadingStudents(false)
+      }
     }
-  }, [formData.classId, classes])
+
+    fetchStudents()
+  }, [formData.classId, toast])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -88,32 +122,50 @@ export default function MarkAttendance() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.classId || !formData.date || Object.keys(attendanceData).length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a class and date to mark attendance.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSaving(true)
+    setError(null)
 
     try {
-      // In a real app, you would call your API to save attendance
-      // Process each student's attendance
-      for (const studentId in attendanceData) {
-        const formDataObj = new FormData()
-        formDataObj.append("date", formData.date)
-        formDataObj.append("studentId", studentId)
-        formDataObj.append("status", attendanceData[studentId])
+      // Create form data for bulk attendance
+      const formDataObj = new FormData()
+      formDataObj.append("date", formData.date)
+      formDataObj.append("classId", formData.classId)
 
-        // Call the server action
-        await markAttendance(formDataObj)
+      // Add each student's attendance status
+      for (const [studentId, status] of Object.entries(attendanceData)) {
+        formDataObj.append(`student-${studentId}`, status)
+      }
+
+      // Call the server action for bulk attendance
+      const result = await markBulkAttendance(formDataObj)
+
+      if (!result.success) {
+        throw new Error(result.errors?._form?.[0] || "Failed to mark attendance")
       }
 
       toast({
-        title: "Attendance Marked",
+        title: "Success",
         description: "Attendance has been marked successfully for all students.",
       })
 
       // Redirect to attendance list
       router.push("/dashboard/teacher/attendance")
     } catch (error) {
+      console.error("Error marking attendance:", error)
+      setError(error instanceof Error ? error.message : "Failed to mark attendance. Please try again.")
       toast({
         title: "Error",
-        description: "Failed to mark attendance. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to mark attendance. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -142,6 +194,8 @@ export default function MarkAttendance() {
           <CardDescription>Select class and date to mark attendance</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-md">{error}</div>}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -159,26 +213,34 @@ export default function MarkAttendance() {
 
               <div className="space-y-2">
                 <Label htmlFor="classId">Class</Label>
-                <Select
-                  value={formData.classId}
-                  onValueChange={(value) => handleSelectChange("classId", value)}
-                  disabled={isSaving}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isLoadingClasses ? (
+                  <div className="h-10 flex items-center text-muted-foreground">Loading classes...</div>
+                ) : classes.length > 0 ? (
+                  <Select
+                    value={formData.classId}
+                    onValueChange={(value) => handleSelectChange("classId", value)}
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {cls.name || `${cls.grade}${cls.section}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="h-10 flex items-center text-muted-foreground">
+                    No classes found. Please contact an administrator.
+                  </div>
+                )}
               </div>
             </div>
 
-            {isLoading ? (
+            {isLoadingStudents ? (
               <div className="text-center py-8">Loading students...</div>
             ) : students.length > 0 ? (
               <div className="space-y-4">
@@ -189,6 +251,9 @@ export default function MarkAttendance() {
                   <Button type="button" variant="outline" size="sm" onClick={() => markAllAs("Absent")}>
                     Mark All Absent
                   </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => markAllAs("Late")}>
+                    Mark All Late
+                  </Button>
                 </div>
 
                 <div className="border rounded-lg overflow-hidden">
@@ -196,6 +261,7 @@ export default function MarkAttendance() {
                     <thead>
                       <tr className="bg-muted">
                         <th className="p-2 text-left font-medium">Student Name</th>
+                        <th className="p-2 text-left font-medium">Admission #</th>
                         <th className="p-2 text-left font-medium">Status</th>
                       </tr>
                     </thead>
@@ -203,6 +269,7 @@ export default function MarkAttendance() {
                       {students.map((student) => (
                         <tr key={student.id} className="border-t">
                           <td className="p-2">{`${student.firstName} ${student.lastName}`}</td>
+                          <td className="p-2">{student.admissionNumber}</td>
                           <td className="p-2">
                             <Select
                               value={attendanceData[student.id] || "Present"}

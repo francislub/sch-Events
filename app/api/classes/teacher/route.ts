@@ -1,19 +1,23 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
+    // Check authentication
     const session = await getServerSession(authOptions)
 
-    if (!session || session.user.role !== "TEACHER") {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      })
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Find teacher profile
+    // Only teachers can access this endpoint
+    if (session.user.role !== "TEACHER") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // Get the teacher profile
     const teacher = await db.teacher.findUnique({
       where: {
         userId: session.user.id,
@@ -21,9 +25,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!teacher) {
-      return new NextResponse(JSON.stringify({ error: "Teacher profile not found" }), {
-        status: 404,
-      })
+      return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 })
     }
 
     // Get classes taught by this teacher
@@ -32,38 +34,28 @@ export async function GET(request: NextRequest) {
         teacherId: teacher.id,
       },
       include: {
-        students: true,
-        schedule: true,
+        _count: {
+          select: {
+            students: true,
+          },
+        },
       },
+      orderBy: [{ grade: "asc" }, { section: "asc" }],
     })
 
-    // Format the response
-    const formattedClasses = classes.map((cls) => {
-      // Get subjects from schedule
-      const subjects = [...new Set(cls.schedule.map((s) => s.subject))]
-
-      return {
-        id: cls.id,
-        name: cls.name,
-        grade: cls.grade,
-        section: cls.section,
-        studentCount: cls.students.length,
-        subjects: subjects,
-        schedule: cls.schedule.map((s) => ({
-          day: s.day,
-          time: `${s.startTime} - ${s.endTime}`,
-          room: s.room,
-          subject: s.subject,
-        })),
-      }
-    })
+    // Format classes for response
+    const formattedClasses = classes.map((cls) => ({
+      id: cls.id,
+      name: cls.name || `${cls.grade}${cls.section}`,
+      grade: cls.grade,
+      section: cls.section,
+      studentCount: cls._count.students,
+    }))
 
     return NextResponse.json(formattedClasses)
   } catch (error) {
     console.error("Error fetching teacher classes:", error)
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-    })
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
 

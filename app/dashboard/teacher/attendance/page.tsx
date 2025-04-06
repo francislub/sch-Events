@@ -1,243 +1,317 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, FileDown, Search, Loader2 } from "lucide-react"
-import Link from "next/link"
+import { markBulkAttendance } from "@/app/actions/attendance-actions"
 
-export default function TeacherAttendance() {
+export default function MarkAttendance() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const [filter, setFilter] = useState({
-    class: "all",
-    date: "",
-    status: "all",
-    search: "",
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().split("T")[0],
+    classId: "",
   })
 
-  const [attendance, setAttendance] = useState<any[]>([])
+  const [students, setStudents] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [attendanceData, setAttendanceData] = useState<Record<string, string>>({})
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true)
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch classes taught by the teacher
   useEffect(() => {
     const fetchClasses = async () => {
       try {
+        setIsLoadingClasses(true)
+        setError(null)
+
         const response = await fetch("/api/classes/teacher")
-        if (!response.ok) throw new Error("Failed to fetch classes")
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch classes")
+        }
+
         const data = await response.json()
         setClasses(data)
-      } catch (error) {
-        console.error("Error fetching classes:", error)
+      } catch (err) {
+        console.error("Error fetching classes:", err)
+        setError("Failed to load classes. Please try again.")
         toast({
           title: "Error",
           description: "Failed to load classes. Please try again.",
           variant: "destructive",
         })
+      } finally {
+        setIsLoadingClasses(false)
       }
     }
 
     fetchClasses()
   }, [toast])
 
-  // Fetch attendance records
+  // Fetch students when class is selected
   useEffect(() => {
-    const fetchAttendance = async () => {
-      setIsLoading(true)
+    if (!formData.classId) {
+      setStudents([])
+      setAttendanceData({})
+      return
+    }
+
+    const fetchStudents = async () => {
       try {
-        let url = "/api/attendance/teacher?"
+        setIsLoadingStudents(true)
+        setError(null)
 
-        if (filter.class && filter.class !== "all") {
-          url += `classId=${filter.class}&`
+        const response = await fetch(`/api/students/class/${formData.classId}`)
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch students")
         }
 
-        if (filter.date) {
-          url += `date=${filter.date}&`
-        }
-
-        if (filter.status && filter.status !== "all") {
-          url += `status=${filter.status}&`
-        }
-
-        if (filter.search) {
-          url += `search=${filter.search}&`
-        }
-
-        const response = await fetch(url)
-        if (!response.ok) throw new Error("Failed to fetch attendance records")
         const data = await response.json()
-        setAttendance(Array.isArray(data) ? data : [])
-      } catch (error) {
-        console.error("Error fetching attendance:", error)
+        setStudents(data.students)
+
+        // Initialize attendance data
+        const initialAttendance: Record<string, string> = {}
+        data.students.forEach((student: any) => {
+          initialAttendance[student.id] = "Present"
+        })
+
+        setAttendanceData(initialAttendance)
+      } catch (err) {
+        console.error("Error fetching students:", err)
+        setError("Failed to load students. Please try again.")
         toast({
           title: "Error",
-          description: "Failed to load attendance records. Please try again.",
+          description: "Failed to load students. Please try again.",
           variant: "destructive",
         })
-        setAttendance([])
+        setStudents([])
+        setAttendanceData({})
       } finally {
-        setIsLoading(false)
+        setIsLoadingStudents(false)
       }
     }
 
-    fetchAttendance()
-  }, [filter, toast])
+    fetchStudents()
+  }, [formData.classId, toast])
 
-  const handleFilterChange = (name: string, value: string) => {
-    setFilter((prev) => ({ ...prev, [name]: value }))
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleExport = () => {
-    toast({
-      title: "Export Started",
-      description: "Attendance records are being exported to CSV.",
-    })
-
-    // In a real app, you would implement the export functionality
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+  const handleAttendanceChange = (studentId: string, status: string) => {
+    setAttendanceData((prev) => ({ ...prev, [studentId]: status }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.classId || !formData.date || Object.keys(attendanceData).length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a class and date to mark attendance.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      // Create form data for bulk attendance
+      const formDataObj = new FormData()
+      formDataObj.append("date", formData.date)
+      formDataObj.append("classId", formData.classId)
+
+      // Add each student's attendance status
+      for (const [studentId, status] of Object.entries(attendanceData)) {
+        formDataObj.append(`student-${studentId}`, status)
+      }
+
+      // Call the server action for bulk attendance
+      const result = await markBulkAttendance(formDataObj)
+
+      if (!result.success) {
+        throw new Error(result.errors?._form?.[0] || "Failed to mark attendance")
+      }
+
+      toast({
+        title: "Success",
+        description: "Attendance has been marked successfully for all students.",
+      })
+
+      // Redirect to attendance list
+      router.push("/dashboard/teacher/attendance")
+    } catch (error) {
+      console.error("Error marking attendance:", error)
+      setError(error instanceof Error ? error.message : "Failed to mark attendance. Please try again.")
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to mark attendance. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const markAllAs = (status: string) => {
+    const updatedAttendance: Record<string, string> = {}
+    students.forEach((student) => {
+      updatedAttendance[student.id] = status
     })
+    setAttendanceData(updatedAttendance)
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Attendance Management</h1>
-          <p className="text-muted-foreground">View and manage student attendance</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/teacher/attendance/mark">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Mark Attendance
-            </Button>
-          </Link>
-          <Button variant="outline" onClick={handleExport}>
-            <FileDown className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Mark Attendance</h1>
+        <p className="text-muted-foreground">Record student attendance for a class</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance Records</CardTitle>
-          <CardDescription>View and filter attendance records</CardDescription>
+          <CardTitle>Attendance Information</CardTitle>
+          <CardDescription>Select class and date to mark attendance</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-grow">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-md">{error}</div>}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="date">Date</Label>
                 <Input
-                  placeholder="Search by student name..."
-                  className="pl-8"
-                  value={filter.search}
-                  onChange={(e) => handleFilterChange("search", e.target.value)}
+                  id="date"
+                  name="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  required
+                  disabled={isSaving}
                 />
               </div>
 
-              <Select value={filter.class} onValueChange={(value) => handleFilterChange("class", value)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="All Classes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Classes</SelectItem>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input
-                type="date"
-                className="w-full md:w-[180px]"
-                value={filter.date}
-                onChange={(e) => handleFilterChange("date", e.target.value)}
-              />
-
-              <Select value={filter.status} onValueChange={(value) => handleFilterChange("status", value)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Present">Present</SelectItem>
-                  <SelectItem value="Absent">Absent</SelectItem>
-                  <SelectItem value="Late">Late</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Label htmlFor="classId">Class</Label>
+                {isLoadingClasses ? (
+                  <div className="h-10 flex items-center text-muted-foreground">Loading classes...</div>
+                ) : classes.length > 0 ? (
+                  <Select
+                    value={formData.classId}
+                    onValueChange={(value) => handleSelectChange("classId", value)}
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {cls.name || `${cls.grade}${cls.section}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="h-10 flex items-center text-muted-foreground">
+                    No classes found. Please contact an administrator.
+                  </div>
+                )}
+              </div>
             </div>
 
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : attendance.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No attendance records found matching the selected filters.
-              </div>
-            ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="p-2 text-left font-medium">Student Name</th>
-                      <th className="p-2 text-left font-medium">Status</th>
-                      <th className="p-2 text-left font-medium">Date</th>
-                      <th className="p-2 text-left font-medium">Class</th>
-                      <th className="p-2 text-left font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendance.map((record) => (
-                      <tr key={record.id} className="border-t">
-                        <td className="p-2">{`${record.student.firstName} ${record.student.lastName}`}</td>
-                        <td className="p-2">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs ${
-                              record.status === "Present"
-                                ? "bg-green-100 text-green-800"
-                                : record.status === "Absent"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {record.status}
-                          </span>
-                        </td>
-                        <td className="p-2">{formatDate(record.date)}</td>
-                        <td className="p-2">{record.class.name}</td>
-                        <td className="p-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => router.push(`/dashboard/teacher/attendance/edit/${record.id}`)}
-                          >
-                            Edit
-                          </Button>
-                        </td>
+            {isLoadingStudents ? (
+              <div className="text-center py-8">Loading students...</div>
+            ) : students.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => markAllAs("Present")}>
+                    Mark All Present
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => markAllAs("Absent")}>
+                    Mark All Absent
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => markAllAs("Late")}>
+                    Mark All Late
+                  </Button>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="p-2 text-left font-medium">Student Name</th>
+                        <th className="p-2 text-left font-medium">Admission #</th>
+                        <th className="p-2 text-left font-medium">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {students.map((student) => (
+                        <tr key={student.id} className="border-t">
+                          <td className="p-2">{`${student.firstName} ${student.lastName}`}</td>
+                          <td className="p-2">{student.admissionNumber}</td>
+                          <td className="p-2">
+                            <Select
+                              value={attendanceData[student.id] || "Present"}
+                              onValueChange={(value) => handleAttendanceChange(student.id, value)}
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger className="w-[180px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Present">Present</SelectItem>
+                                <SelectItem value="Absent">Absent</SelectItem>
+                                <SelectItem value="Late">Late</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end space-x-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push("/dashboard/teacher/attendance")}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSaving || students.length === 0}>
+                    {isSaving ? "Saving..." : "Save Attendance"}
+                  </Button>
+                </div>
               </div>
+            ) : formData.classId ? (
+              <div className="text-center py-8 text-muted-foreground">No students found in this class.</div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">Please select a class to view students.</div>
             )}
-          </div>
+          </form>
         </CardContent>
       </Card>
     </div>

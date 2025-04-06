@@ -30,10 +30,33 @@ export default function AddGrade() {
 
   const [students, setStudents] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
-  const [subjects, setSubjects] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [errors, setErrors] = useState<Record<string, string[]>>({})
+
+  // Define subjects directly in the component
+  const subjects = [
+    "Mathematics",
+    "English Language",
+    "Science",
+    "Social Studies",
+    "History",
+    "Geography",
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Computer Science",
+    "Information Technology",
+    "Art",
+    "Music",
+    "Physical Education",
+    "Foreign Language",
+    "Economics",
+    "Business Studies",
+    "Religious Studies",
+    "Civics",
+    "Environmental Science",
+  ]
 
   const terms = ["Term 1", "Term 2", "Term 3", "Final"]
 
@@ -46,11 +69,6 @@ export default function AddGrade() {
         if (!response.ok) throw new Error("Failed to fetch classes")
         const data = await response.json()
         setClasses(data)
-
-        // Extract unique subjects from all classes
-        const allSubjects = data.flatMap((cls) => cls.subjects || [])
-        const uniqueSubjects = [...new Set(allSubjects)]
-        setSubjects(uniqueSubjects)
       } catch (error) {
         console.error("Error fetching classes:", error)
         toast({
@@ -104,7 +122,7 @@ export default function AddGrade() {
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
 
-    // If grade is selected, set a default letter grade based on score
+    // If score is changed, set a default letter grade based on score
     if (name === "score") {
       const score = Number.parseFloat(value)
       let grade = ""
@@ -216,7 +234,7 @@ export default function AddGrade() {
                     <SelectContent>
                       {students.map((student) => (
                         <SelectItem key={student.id} value={student.id}>
-                          {student.name}
+                          {student.firstName} {student.lastName}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -235,15 +253,11 @@ export default function AddGrade() {
                       <SelectValue placeholder="Select subject" />
                     </SelectTrigger>
                     <SelectContent>
-                      {subjects.length > 0 ? (
-                        subjects.map((subject) => (
-                          <SelectItem key={subject} value={subject}>
-                            {subject}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="default">No subjects available</SelectItem>
-                      )}
+                      {subjects.map((subject) => (
+                        <SelectItem key={subject} value={subject}>
+                          {subject}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   {errors.subject && <p className="text-sm text-red-500">{errors.subject[0]}</p>}
