@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Send, User } from "lucide-react"
+import { Send, User, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function TeacherMessages() {
@@ -15,6 +15,7 @@ export default function TeacherMessages() {
   const [parents, setParents] = useState<any[]>([])
   const [messages, setMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSending, setIsSending] = useState(false)
   const { toast } = useToast()
 
   // Fetch parents of students taught by the teacher
@@ -65,6 +66,7 @@ export default function TeacherMessages() {
   const handleSendMessage = async () => {
     if (!selectedParent || !message.trim()) return
 
+    setIsSending(true)
     try {
       const response = await fetch("/api/messages", {
         method: "POST",
@@ -95,6 +97,8 @@ export default function TeacherMessages() {
         description: "Failed to send message. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -132,7 +136,7 @@ export default function TeacherMessages() {
                   <SelectContent>
                     {parents.map((parent) => (
                       <SelectItem key={parent.id} value={parent.id}>
-                        {parent.name} - {parent.children?.join(", ")}
+                        {parent.name} - {parent.children.map((child: any) => child.name).join(", ")}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -150,8 +154,13 @@ export default function TeacherMessages() {
                 />
               </div>
 
-              <Button className="w-full" onClick={handleSendMessage} disabled={!selectedParent || !message.trim()}>
-                <Send className="mr-2 h-4 w-4" />
+              <Button
+                className="w-full"
+                onClick={handleSendMessage}
+                disabled={!selectedParent || !message.trim() || isSending}
+              >
+                {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Send className={`${isSending ? "" : "mr-2"} h-4 w-4`} />
                 Send Message
               </Button>
             </div>
@@ -165,27 +174,31 @@ export default function TeacherMessages() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {messages.length > 0 ? (
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : messages.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No messages yet. Start a conversation with a parent.
+                </p>
+              ) : (
                 messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.sender === "You" ? "justify-end" : "justify-start"}`}>
+                  <div key={msg.id} className={`flex ${msg.isFromMe ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[80%] rounded-lg p-3 ${
-                        msg.sender === "You" ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"
+                        msg.isFromMe ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <User className="h-4 w-4" />
-                        <span className="font-medium">{msg.sender}</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(msg.timestamp)}</span>
+                        <span className="font-medium">{msg.isFromMe ? "You" : msg.senderName}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                       </div>
                       <p>{msg.content}</p>
                     </div>
                   </div>
                 ))
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No messages yet. Start a conversation with a parent.
-                </p>
               )}
             </div>
           </CardContent>

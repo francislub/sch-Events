@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/db"
+import { db } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,12 +13,23 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const teacherId = session.user.id
-
-    // Get classes taught by the teacher
-    const classes = await prisma.class.findMany({
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
       where: {
-        teacherId,
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return new NextResponse(JSON.stringify({ error: "Teacher profile not found" }), {
+        status: 404,
+      })
+    }
+
+    // Get classes taught by this teacher
+    const classes = await db.class.findMany({
+      where: {
+        teacherId: teacher.id,
       },
       include: {
         students: true,

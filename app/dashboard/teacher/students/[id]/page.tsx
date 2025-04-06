@@ -2,47 +2,48 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Mail, Phone } from "lucide-react"
-import Link from "next/link"
+import { ArrowLeft, Loader2, Mail, Phone, MapPin, Calendar, User, GraduationCap } from "lucide-react"
 
-export default function StudentDetail({ params }: { params: { id: string } }) {
+export default function StudentDetails({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { toast } = useToast()
+  const { id } = params
+
   const [student, setStudent] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [grades, setGrades] = useState<any[]>([])
   const [attendance, setAttendance] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const fetchStudentData = async () => {
+    const fetchStudentDetails = async () => {
       setIsLoading(true)
       try {
         // Fetch student details
-        const studentResponse = await fetch(`/api/students/${params.id}`)
-        if (!studentResponse.ok) throw new Error("Failed to fetch student")
-        const studentData = await studentResponse.json()
-        setStudent(studentData)
+        const response = await fetch(`/api/students/${id}`)
+        if (!response.ok) throw new Error("Failed to fetch student details")
+        const data = await response.json()
+        setStudent(data)
 
-        // Fetch grades
-        const gradesResponse = await fetch(`/api/grades?studentId=${params.id}`)
-        if (!gradesResponse.ok) throw new Error("Failed to fetch grades")
+        // Fetch student grades
+        const gradesResponse = await fetch(`/api/grades/student/${id}`)
+        if (!gradesResponse.ok) throw new Error("Failed to fetch student grades")
         const gradesData = await gradesResponse.json()
         setGrades(gradesData)
 
-        // Fetch attendance
-        const attendanceResponse = await fetch(`/api/attendance?studentId=${params.id}`)
-        if (!attendanceResponse.ok) throw new Error("Failed to fetch attendance")
+        // Fetch student attendance
+        const attendanceResponse = await fetch(`/api/attendance/student/${id}`)
+        if (!attendanceResponse.ok) throw new Error("Failed to fetch student attendance")
         const attendanceData = await attendanceResponse.json()
         setAttendance(attendanceData)
       } catch (error) {
-        console.error("Error fetching student data:", error)
+        console.error("Error fetching student details:", error)
         toast({
           title: "Error",
-          description: "Failed to load student data. Please try again.",
+          description: "Failed to load student details. Please try again.",
           variant: "destructive",
         })
       } finally {
@@ -50,23 +51,8 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
       }
     }
 
-    fetchStudentData()
-  }, [params.id, toast])
-
-  if (isLoading) {
-    return <div className="text-center py-8">Loading student data...</div>
-  }
-
-  if (!student) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Student not found.</p>
-        <Button className="mt-4" onClick={() => router.push("/dashboard/teacher/students")}>
-          Back to Students
-        </Button>
-      </div>
-    )
-  }
+    fetchStudentDetails()
+  }, [id, toast])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -76,122 +62,106 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/teacher/students")}>
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!student) {
+    return (
+      <div className="text-center py-8">
+        <p>Student not found or you don't have permission to view this student.</p>
+        <Button variant="outline" className="mt-4" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+          Go Back
         </Button>
       </div>
+    )
+  }
 
-      <div className="flex flex-col md:flex-row justify-between gap-4">
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {student.firstName} {student.lastName}
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">{`${student.firstName} ${student.lastName}`}</h1>
           <p className="text-muted-foreground">Student Details</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/dashboard/teacher/grades/new?studentId=${student.id}`}>
-            <Button>Add Grade</Button>
-          </Link>
-          <Link href={`/dashboard/teacher/attendance/mark?studentId=${student.id}`}>
-            <Button variant="outline">Mark Attendance</Button>
-          </Link>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle>Student Information</CardTitle>
+            <CardTitle>Personal Information</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                <p>
-                  {student.firstName} {student.lastName}
-                </p>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span>Admission Number: {student.admissionNumber}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span>Date of Birth: {formatDate(student.dateOfBirth)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+              <span>Class: {student.class?.name || "Not assigned"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <span>Address: {student.address || "Not provided"}</span>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h3 className="font-medium mb-2">Parent Information</h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>Name: {student.parent?.user?.name || "Not provided"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span>Email: {student.parent?.user?.email || "Not provided"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>Phone: {student.parent?.phone || "Not provided"}</span>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Admission Number</p>
-                <p>{student.admissionNumber}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Class</p>
-                <p>{student.class?.name || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Gender</p>
-                <p>{student.gender}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Date of Birth</p>
-                <p>{formatDate(student.dateOfBirth)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Enrollment Date</p>
-                <p>{formatDate(student.enrollmentDate)}</p>
-              </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/dashboard/teacher/messages?parent=${student.parent?.user?.id}`)}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Message Parent
+              </Button>
             </div>
           </CardContent>
         </Card>
 
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Parent Information</CardTitle>
+            <Tabs defaultValue="grades">
+              <TabsList>
+                <TabsTrigger value="grades">Grades</TabsTrigger>
+                <TabsTrigger value="attendance">Attendance</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </CardHeader>
           <CardContent>
-            {student.parent ? (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Parent Name</p>
-                  <p>{student.parent.user?.name || "N/A"}</p>
-                </div>
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <p>{student.parent.user?.email || "N/A"}</p>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-muted-foreground">Phone</p>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <p>{student.parent.phone || "N/A"}</p>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Address</p>
-                  <p>{student.address || "N/A"}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No parent information available.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="grades">
-        <TabsList>
-          <TabsTrigger value="grades">Grades</TabsTrigger>
-          <TabsTrigger value="attendance">Attendance</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="grades" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Academic Performance</CardTitle>
-              <CardDescription>Grades and academic records</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {grades.length > 0 ? (
+            <TabsContent value="grades" className="mt-0">
+              {grades.length === 0 ? (
+                <p className="text-center py-4 text-muted-foreground">No grades recorded for this student.</p>
+              ) : (
                 <div className="border rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead>
@@ -206,24 +176,24 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
                     <tbody>
                       {grades.map((grade) => (
                         <tr key={grade.id} className="border-t">
-                          <td className="p-2">{grade.subject}</td>
-                          <td className="p-2">{grade.term}</td>
+                          <td className="p-2">{grade.subject.name}</td>
+                          <td className="p-2">{grade.term.name}</td>
                           <td className="p-2">{grade.score}</td>
                           <td className="p-2">
                             <span
                               className={`px-2 py-1 rounded-full text-xs ${
-                                grade.grade.startsWith("A")
+                                grade.letterGrade.startsWith("A")
                                   ? "bg-green-100 text-green-800"
-                                  : grade.grade.startsWith("B")
+                                  : grade.letterGrade.startsWith("B")
                                     ? "bg-blue-100 text-blue-800"
-                                    : grade.grade.startsWith("C")
+                                    : grade.letterGrade.startsWith("C")
                                       ? "bg-yellow-100 text-yellow-800"
-                                      : grade.grade.startsWith("D")
+                                      : grade.letterGrade.startsWith("D")
                                         ? "bg-orange-100 text-orange-800"
                                         : "bg-red-100 text-red-800"
                               }`}
                             >
-                              {grade.grade}
+                              {grade.letterGrade}
                             </span>
                           </td>
                           <td className="p-2">{formatDate(grade.createdAt)}</td>
@@ -232,21 +202,13 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <p className="text-center py-4 text-muted-foreground">No grades recorded yet.</p>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </TabsContent>
 
-        <TabsContent value="attendance" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Attendance Records</CardTitle>
-              <CardDescription>Student attendance history</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {attendance.length > 0 ? (
+            <TabsContent value="attendance" className="mt-0">
+              {attendance.length === 0 ? (
+                <p className="text-center py-4 text-muted-foreground">No attendance records for this student.</p>
+              ) : (
                 <div className="border rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead>
@@ -254,7 +216,7 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
                         <th className="p-2 text-left font-medium">Date</th>
                         <th className="p-2 text-left font-medium">Status</th>
                         <th className="p-2 text-left font-medium">Class</th>
-                        <th className="p-2 text-left font-medium">Marked By</th>
+                        <th className="p-2 text-left font-medium">Remarks</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -274,20 +236,18 @@ export default function StudentDetail({ params }: { params: { id: string } }) {
                               {record.status}
                             </span>
                           </td>
-                          <td className="p-2">{record.class?.name || "N/A"}</td>
-                          <td className="p-2">{record.markedBy?.name || "System"}</td>
+                          <td className="p-2">{record.class.name}</td>
+                          <td className="p-2">{record.remarks || "No remarks"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <p className="text-center py-4 text-muted-foreground">No attendance records yet.</p>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </TabsContent>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

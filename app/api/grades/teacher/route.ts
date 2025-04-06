@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/db"
+import { db } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,18 +13,30 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const teacherId = session.user.id
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
+      where: {
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return new NextResponse(JSON.stringify({ error: "Teacher profile not found" }), {
+        status: 404,
+      })
+    }
+
     const { searchParams } = new URL(request.url)
 
     const classId = searchParams.get("classId")
-    const subject = searchParams.get("subject")
+    const subjectId = searchParams.get("subjectId")
     const term = searchParams.get("term")
     const search = searchParams.get("search")
 
     // Get teacher's classes
-    const teacherClasses = await prisma.class.findMany({
+    const teacherClasses = await db.class.findMany({
       where: {
-        teacherId,
+        teacherId: teacher.id,
       },
       select: {
         id: true,
@@ -35,32 +47,21 @@ export async function GET(request: NextRequest) {
 
     // Build the query
     const whereClause: any = {
-      OR: [
-        {
-          student: {
-            classId: {
-              in: classIds,
-            },
-          },
-        },
-        {
-          classId: {
-            in: classIds,
-          },
-        },
-      ],
+      classId: {
+        in: classIds,
+      },
     }
 
-    if (classId) {
+    if (classId && classId !== "all") {
       whereClause.classId = classId
     }
 
-    if (subject) {
-      whereClause.subject = subject
+    if (subjectId && subjectId !== "all") {
+      whereClause.subjectId = subjectId
     }
 
-    if (term) {
-      whereClause.term = term
+    if (term && term !== "all") {
+      whereClause.termId = term
     }
 
     if (search) {
@@ -82,15 +83,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const grades = await prisma.grade.findMany({
+    const grades = await db.grade.findMany({
       where: whereClause,
       include: {
-        student: {
-          include: {
-            class: true,
-          },
-        },
+        student: true,
         class: true,
+        subject: true,
+        term: true,
       },
       orderBy: {
         createdAt: "desc",

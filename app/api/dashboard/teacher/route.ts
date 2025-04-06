@@ -41,10 +41,15 @@ export async function GET(req: Request) {
     // Get total students
     const totalStudents = classes.reduce((acc, cls) => acc + cls.students.length, 0)
 
+    // Get class IDs
+    const classIds = classes.map((cls) => cls.id)
+
     // Get pending assignments to grade
     const pendingAssignments = await db.assignment.count({
       where: {
-        teacherId: teacher.id,
+        classId: {
+          in: classIds,
+        },
         submissions: {
           some: {
             gradedAt: null,
@@ -59,7 +64,7 @@ export async function GET(req: Request) {
     const schedules = await db.schedule.findMany({
       where: {
         classId: {
-          in: classes.map((cls) => cls.id),
+          in: classIds,
         },
         dayOfWeek: dayOfWeek.toString(),
       },
@@ -81,7 +86,9 @@ export async function GET(req: Request) {
     // Get recent activities (grades, attendance, etc.)
     const recentGrades = await db.grade.findMany({
       where: {
-        teacherId: teacher.id,
+        classId: {
+          in: classIds,
+        },
       },
       include: {
         student: true,
@@ -95,7 +102,9 @@ export async function GET(req: Request) {
 
     const recentAttendance = await db.attendance.findMany({
       where: {
-        markedById: session.user.id,
+        classId: {
+          in: classIds,
+        },
       },
       include: {
         student: true,

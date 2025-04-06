@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         // Remove phone field as it doesn't exist in the schema
         // address: true,
         // bio: true,
-        image: true,
+        // image: true,
       },
     })
 
@@ -83,7 +83,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         // Remove phone field as it doesn't exist in the schema
         // address: true,
         // bio: true,
-        image: true,
+        // image: true,
       },
     })
 

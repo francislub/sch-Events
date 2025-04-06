@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, FileDown, Search } from "lucide-react"
+import { Plus, FileDown, Search, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 export default function TeacherGrades() {
@@ -23,13 +23,54 @@ export default function TeacherGrades() {
 
   const [grades, setGrades] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-
-  // Mock data for classes, subjects, and terms
   const [classes, setClasses] = useState<any[]>([])
-  const [subjects, setSubjects] = useState<string[]>([])
-  const [terms, setTerms] = useState<string[]>([])
+  const [subjects, setSubjects] = useState<any[]>([])
+  const [terms, setTerms] = useState<any[]>([])
 
-  // Mock data for grades
+  // Fetch classes taught by the teacher
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const response = await fetch("/api/classes/teacher")
+        if (!response.ok) throw new Error("Failed to fetch classes")
+        const data = await response.json()
+        setClasses(data)
+      } catch (error) {
+        console.error("Error fetching classes:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load classes. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchClasses()
+  }, [toast])
+
+  // Fetch subjects and terms
+  useEffect(() => {
+    const fetchSubjectsAndTerms = async () => {
+      try {
+        const response = await fetch("/api/subjects")
+        if (!response.ok) throw new Error("Failed to fetch subjects")
+        const data = await response.json()
+        setSubjects(data.subjects || [])
+        setTerms(data.terms || [])
+      } catch (error) {
+        console.error("Error fetching subjects and terms:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load subjects and terms. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchSubjectsAndTerms()
+  }, [toast])
+
+  // Fetch grades
   useEffect(() => {
     const fetchGrades = async () => {
       setIsLoading(true)
@@ -41,7 +82,7 @@ export default function TeacherGrades() {
         }
 
         if (filter.subject && filter.subject !== "all") {
-          url += `subject=${filter.subject}&`
+          url += `subjectId=${filter.subject}&`
         }
 
         if (filter.term && filter.term !== "all") {
@@ -71,57 +112,6 @@ export default function TeacherGrades() {
 
     fetchGrades()
   }, [filter, toast])
-
-  useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        const response = await fetch("/api/classes/teacher")
-        if (!response.ok) throw new Error("Failed to fetch classes")
-        const data = await response.json()
-        setClasses(data)
-      } catch (error) {
-        console.error("Error fetching classes:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load classes. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-
-    const fetchSubjectsAndTerms = async () => {
-      try {
-        const response = await fetch("/api/subjects")
-        if (!response.ok) throw new Error("Failed to fetch subjects")
-        const data = await response.json()
-        setSubjects(data.subjects || [])
-        setTerms(data.terms || [])
-      } catch (error) {
-        console.error("Error fetching subjects and terms:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load subjects and terms. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-
-    fetchClasses()
-    fetchSubjectsAndTerms()
-  }, [toast])
-
-  // Filter grades based on selected filters
-  const filteredGrades = grades.filter((grade) => {
-    const matchesClass = !filter.class || `${grade.student.grade}${grade.student.section}` === filter.class
-    const matchesSubject = !filter.subject || grade.subject === filter.subject
-    const matchesTerm = !filter.term || grade.term === filter.term
-    const matchesSearch =
-      !filter.search ||
-      grade.student.firstName.toLowerCase().includes(filter.search.toLowerCase()) ||
-      grade.student.lastName.toLowerCase().includes(filter.search.toLowerCase())
-
-    return matchesClass && matchesSubject && matchesTerm && matchesSearch
-  })
 
   const handleFilterChange = (name: string, value: string) => {
     setFilter((prev) => ({ ...prev, [name]: value }))
@@ -182,7 +172,7 @@ export default function TeacherGrades() {
                 <SelectContent>
                   <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.name}>
+                    <SelectItem key={cls.id} value={cls.id}>
                       {cls.name}
                     </SelectItem>
                   ))}
@@ -196,8 +186,8 @@ export default function TeacherGrades() {
                 <SelectContent>
                   <SelectItem value="all">All Subjects</SelectItem>
                   {subjects.map((subject) => (
-                    <SelectItem key={subject} value={subject}>
-                      {subject}
+                    <SelectItem key={subject.id} value={subject.id}>
+                      {subject.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -210,8 +200,8 @@ export default function TeacherGrades() {
                 <SelectContent>
                   <SelectItem value="all">All Terms</SelectItem>
                   {terms.map((term) => (
-                    <SelectItem key={term} value={term}>
-                      {term}
+                    <SelectItem key={term.id} value={term.id}>
+                      {term.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -219,8 +209,10 @@ export default function TeacherGrades() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-8">Loading grades...</div>
-            ) : filteredGrades.length === 0 ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : grades.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No grades found matching the selected filters.
               </div>
@@ -239,28 +231,28 @@ export default function TeacherGrades() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredGrades.map((grade) => (
+                    {grades.map((grade) => (
                       <tr key={grade.id} className="border-t">
                         <td className="p-2">{`${grade.student.firstName} ${grade.student.lastName}`}</td>
-                        <td className="p-2">{`${grade.student.grade}${grade.student.section}`}</td>
-                        <td className="p-2">{grade.subject}</td>
-                        <td className="p-2">{grade.term}</td>
+                        <td className="p-2">{grade.class.name}</td>
+                        <td className="p-2">{grade.subject.name}</td>
+                        <td className="p-2">{grade.term.name}</td>
                         <td className="p-2">{grade.score}</td>
                         <td className="p-2">
                           <span
                             className={`px-2 py-1 rounded-full text-xs ${
-                              grade.grade.startsWith("A")
+                              grade.letterGrade.startsWith("A")
                                 ? "bg-green-100 text-green-800"
-                                : grade.grade.startsWith("B")
+                                : grade.letterGrade.startsWith("B")
                                   ? "bg-blue-100 text-blue-800"
-                                  : grade.grade.startsWith("C")
+                                  : grade.letterGrade.startsWith("C")
                                     ? "bg-yellow-100 text-yellow-800"
-                                    : grade.grade.startsWith("D")
+                                    : grade.letterGrade.startsWith("D")
                                       ? "bg-orange-100 text-orange-800"
                                       : "bg-red-100 text-red-800"
                             }`}
                           >
-                            {grade.grade}
+                            {grade.letterGrade}
                           </span>
                         </td>
                         <td className="p-2">

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Search, Eye, Users, BookOpen } from "lucide-react"
+import { Search, Eye, Users, BookOpen, Loader2 } from "lucide-react"
 
 export default function TeacherClasses() {
   const router = useRouter()
@@ -76,7 +76,9 @@ export default function TeacherClasses() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-8">Loading classes...</div>
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
             ) : filteredClasses.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No classes found matching your search.</div>
             ) : (

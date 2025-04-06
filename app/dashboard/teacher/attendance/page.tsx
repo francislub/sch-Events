@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, FileDown, Search } from "lucide-react"
+import { Plus, FileDown, Search, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 export default function TeacherAttendance() {
@@ -184,7 +184,9 @@ export default function TeacherAttendance() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-8">Loading attendance records...</div>
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
             ) : attendance.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No attendance records found matching the selected filters.

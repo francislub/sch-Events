@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/db"
+import { db } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get unique subjects from the database
-    const gradesWithSubjects = await prisma.grade.findMany({
+    const gradesWithSubjects = await db.grade.findMany({
       select: {
         subject: true,
       },
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const subjects = gradesWithSubjects.map((grade) => grade.subject)
 
     // Get unique terms from the database
-    const gradesWithTerms = await prisma.grade.findMany({
+    const gradesWithTerms = await db.grade.findMany({
       select: {
         term: true,
       },

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { FileDown, Search, Edit, Trash2, Eye } from "lucide-react"
+import { FileDown, Search, Edit, Trash2, Eye, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -55,7 +55,7 @@ export default function TeacherStudents() {
     const fetchStudents = async () => {
       setIsLoading(true)
       try {
-        const url = `/api/students?${selectedClass !== "all" ? `classId=${selectedClass}` : ""}`
+        const url = `/api/students/teacher?${selectedClass !== "all" ? `classId=${selectedClass}` : ""}`
         const response = await fetch(url)
         if (!response.ok) throw new Error("Failed to fetch students")
         const data = await response.json()
@@ -77,15 +77,13 @@ export default function TeacherStudents() {
   }, [selectedClass, toast])
 
   // Filter students based on search query
-  const filteredStudents = Array.isArray(students)
-    ? students.filter((student) => {
-        const fullName = `${student.firstName} ${student.lastName}`.toLowerCase()
-        const admissionNumber = student.admissionNumber?.toLowerCase() || ""
-        const query = searchQuery.toLowerCase()
+  const filteredStudents = students.filter((student) => {
+    const fullName = `${student.firstName} ${student.lastName}`.toLowerCase()
+    const admissionNumber = student.admissionNumber?.toLowerCase() || ""
+    const query = searchQuery.toLowerCase()
 
-        return fullName.includes(query) || admissionNumber.includes(query)
-      })
-    : []
+    return fullName.includes(query) || admissionNumber.includes(query)
+  })
 
   const handleDeleteClick = (student: any) => {
     setStudentToDelete(student)
@@ -180,7 +178,9 @@ export default function TeacherStudents() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-8">Loading students...</div>
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
             ) : filteredStudents.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No students found matching the selected filters.

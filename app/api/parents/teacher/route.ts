@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/db"
+import { db } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,12 +13,23 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const teacherId = session.user.id
-
-    // Get teacher's classes
-    const teacherClasses = await prisma.class.findMany({
+    // Find teacher profile
+    const teacher = await db.teacher.findUnique({
       where: {
-        teacherId,
+        userId: session.user.id,
+      },
+    })
+
+    if (!teacher) {
+      return new NextResponse(JSON.stringify({ error: "Teacher profile not found" }), {
+        status: 404,
+      })
+    }
+
+    // Get classes taught by this teacher
+    const teacherClasses = await db.class.findMany({
+      where: {
+        teacherId: teacher.id,
       },
       select: {
         id: true,
@@ -28,7 +39,7 @@ export async function GET(request: NextRequest) {
     const classIds = teacherClasses.map((c) => c.id)
 
     // Get parents of students in teacher's classes
-    const parents = await prisma.parent.findMany({
+    const parents = await db.parent.findMany({
       where: {
         students: {
           some: {
@@ -47,6 +58,11 @@ export async function GET(request: NextRequest) {
           },
         },
         students: {
+          where: {
+            classId: {
+              in: classIds,
+            },
+          },
           include: {
             class: true,
           },
@@ -62,7 +78,7 @@ export async function GET(request: NextRequest) {
       children: parent.students.map((student) => ({
         id: student.id,
         name: `${student.firstName} ${student.lastName}`,
-        class: student.class ? `Grade ${student.class.name}` : "N/A",
+        class: student.class ? student.class.name : "N/A",
       })),
     }))
 
