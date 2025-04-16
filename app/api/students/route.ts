@@ -1,21 +1,21 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { hash } from "bcrypt";
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { hash } from "bcrypt"
 
 export async function POST(req: Request) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions)
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Only admin can add students
     if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const {
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       createAccount,
       email,
       password,
-    } = await req.json();
+    } = await req.json()
 
     // Validate required fields
     if (
@@ -48,40 +48,37 @@ export async function POST(req: Request) {
       !parentId ||
       !classId
     ) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     // Check if student with admission number already exists
     const existingStudent = await db.student.findUnique({
-      where: { admissionNumber },
-    });
+      where: {
+        admissionNumber,
+      },
+    })
 
     if (existingStudent) {
-      return NextResponse.json(
-        { error: "Student with this admission number already exists" },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Student with this admission number already exists" }, { status: 409 })
     }
 
     // Create student with or without user account
-    let student;
+    let student
 
     if (createAccount && email && password) {
       // Check if user with email already exists
-      const existingUser = await db.user.findUnique({ where: { email } });
+      const existingUser = await db.user.findUnique({
+        where: {
+          email,
+        },
+      })
 
       if (existingUser) {
-        return NextResponse.json(
-          { error: "User with this email already exists" },
-          { status: 409 }
-        );
+        return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
       }
 
       // Hash password
-      const hashedPassword = await hash(password, 10);
+      const hashedPassword = await hash(password, 10)
 
       // Create user
       const user = await db.user.create({
@@ -91,7 +88,7 @@ export async function POST(req: Request) {
           password: hashedPassword,
           role: "STUDENT",
         },
-      });
+      })
 
       // Create student with user account
       student = await db.student.create({
@@ -109,7 +106,7 @@ export async function POST(req: Request) {
           parentId,
           classId,
         },
-      });
+      })
     } else {
       // Create student without user account
       student = await db.student.create({
@@ -126,64 +123,71 @@ export async function POST(req: Request) {
           parentId,
           classId,
         },
-      });
+      })
     }
 
-    return NextResponse.json(
-      { message: "Student added successfully", student },
-      { status: 201 }
-    );
+    return NextResponse.json({ message: "Student added successfully", student }, { status: 201 })
   } catch (error) {
-    console.error("Error adding student:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 }
-    );
+    console.error("Error adding student:", error)
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
 
 export async function GET(req: Request) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions)
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(req.url);
-    const grade = searchParams.get("grade");
-    const section = searchParams.get("section");
-    const classId = searchParams.get("classId");
-    const parentId = searchParams.get("parentId");
+    const { searchParams } = new URL(req.url)
+    const grade = searchParams.get("grade")
+    const section = searchParams.get("section")
+    const classId = searchParams.get("classId")
+    const parentId = searchParams.get("parentId")
 
-    // Build filter object
-    const filter: Record<string, any> = {};
+    console.log("Student API request params:", { grade, section, classId, parentId })
 
-    if (grade) filter.grade = grade;
-    if (section) filter.section = section;
-    if (classId) filter.classId = classId;
-    if (parentId) filter.parentId = parentId;
+    // Build filter
+    const filter: any = {}
 
-    // If the user is a parent, restrict results to their children only
+    if (grade) {
+      filter.grade = grade
+    }
+
+    if (section) {
+      filter.section = section
+    }
+
+    if (classId) {
+      filter.classId = classId
+    }
+
+    if (parentId) {
+      filter.parentId = parentId
+    }
+
+    // If parent, only show their children
     if (session.user.role === "PARENT") {
       const parent = await db.parent.findUnique({
-        where: { userId: session.user.id },
-      });
+        where: {
+          userId: session.user.id,
+        },
+      })
 
       if (!parent) {
-        console.error("Parent profile not found for user:", session.user.id);
-        return NextResponse.json(
-          { error: "Parent profile not found" },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: "Parent profile not found" }, { status: 404 })
       }
 
-      filter.parentId = parent.id;
+      filter.parentId = parent.id
     }
 
-    // Fetch students (ensure result is always an array)
-    const students = (await db.student.findMany({
+    console.log("Student API filter:", filter)
+
+    // Get students
+    const students = await db.student.findMany({
       where: filter,
       include: {
         user: {
@@ -204,19 +208,13 @@ export async function GET(req: Request) {
         },
         class: true,
       },
-    })) || [];
+    })
 
-    console.log("Students fetched:", students);
+    console.log(`Students fetched: ${students.length}`)
 
-    // Ensure response is a valid JSON object
-    return NextResponse.json({ students });
+    return NextResponse.json(students)
   } catch (error) {
-    console.error("Error fetching students:", error);
-
-    return NextResponse.json(
-      { error: "Something went wrong", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    console.error("Error fetching students:", error)
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
-

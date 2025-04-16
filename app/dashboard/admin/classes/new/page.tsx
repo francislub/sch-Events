@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { addClass } from "@/app/actions/class"
-import { getTeachers } from "@/app/actions/teacher-actions"
+import { addClass } from "@/app/actions/class-actions"
+import { Loader2 } from "lucide-react"
 
 export default function AddClass() {
   const router = useRouter()
@@ -19,8 +19,8 @@ export default function AddClass() {
 
   const [formData, setFormData] = useState({
     name: "",
-    grade: "",
-    section: "",
+    grade: "", // This will now store the level (O LEVEL, A LEVEL)
+    section: "", // This will now store ARTS or SCIENCES for A LEVEL
     teacherId: "",
   })
 
@@ -29,37 +29,61 @@ export default function AddClass() {
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(true)
   const [errors, setErrors] = useState<Record<string, string[]>>({})
 
-  // Available grades and sections
-  const grades = ["7", "8", "9", "10", "11", "12"]
-  const sections = ["A", "B", "C", "D"]
+  // Available levels and sections
+  const levels = ["O LEVEL", "A LEVEL"]
+  const sections = {
+    "A LEVEL": ["ARTS", "SCIENCES"],
+    "O LEVEL": [],
+  }
 
   // Fetch teachers from database
   useEffect(() => {
     const fetchTeachers = async () => {
-      setIsLoadingTeachers(true);
+      setIsLoadingTeachers(true)
       try {
-        const teachersData = await getTeachers();
-        console.log("Fetched teachers:", teachersData); // Debugging
-        if (teachersData && Array.isArray(teachersData)) {
-          setTeachers(teachersData);
+        console.log("Fetching teachers...")
+        const response = await fetch("/api/teachers")
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log("Teachers API response:", data)
+
+        if (Array.isArray(data)) {
+          // The API returns teachers with user property containing name
+          setTeachers(data)
+          console.log(`Successfully loaded ${data.length} teachers`)
         } else {
-          setTeachers([]); // Ensure it's an array
+          console.error("Teachers data is not an array:", data)
+          setTeachers([])
+          toast({
+            title: "Error",
+            description: "Failed to load teachers data. Unexpected format.",
+            variant: "destructive",
+          })
         }
       } catch (error) {
-        console.error("Error fetching teachers:", error);
+        console.error("Error fetching teachers:", error)
         toast({
           title: "Error",
           description: "Failed to load teachers. Please try again.",
           variant: "destructive",
-        });
+        })
+        setTeachers([])
       } finally {
-        setIsLoadingTeachers(false);
+        setIsLoadingTeachers(false)
       }
-    };
-  
-    fetchTeachers();
-  }, [toast]);
-  
+    }
+
+    fetchTeachers()
+  }, [toast])
+
+  // Log teachers state for debugging
+  useEffect(() => {
+    console.log("Teachers state updated:", teachers)
+  }, [teachers])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -67,14 +91,19 @@ export default function AddClass() {
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-
-    // Auto-generate class name when grade and section are selected
-    if (name === "grade" || name === "section") {
-      const updatedData = { ...formData, [name]: value }
-      if (updatedData.grade && updatedData.section) {
-        setFormData((prev) => ({ ...prev, [name]: value, name: `${updatedData.grade}${updatedData.section}` }))
+    if (name === "grade") {
+      // If changing level, reset section if it's O LEVEL
+      if (value === "O LEVEL") {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          section: "", // Clear section when O LEVEL is selected
+        }))
+      } else {
+        setFormData((prev) => ({ ...prev, [name]: value }))
       }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }))
     }
   }
 
@@ -135,19 +164,19 @@ export default function AddClass() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="grade">Grade</Label>
+                <Label htmlFor="grade">Level</Label>
                 <Select
                   value={formData.grade}
                   onValueChange={(value) => handleSelectChange("grade", value)}
                   disabled={isLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select grade" />
+                    <SelectValue placeholder="Select level" />
                   </SelectTrigger>
                   <SelectContent>
-                    {grades.map((grade) => (
-                      <SelectItem key={grade} value={grade}>
-                        Grade {grade}
+                    {levels.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -155,26 +184,28 @@ export default function AddClass() {
                 {errors.grade && <p className="text-sm text-red-500">{errors.grade[0]}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="section">Section</Label>
-                <Select
-                  value={formData.section}
-                  onValueChange={(value) => handleSelectChange("section", value)}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select section" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sections.map((section) => (
-                      <SelectItem key={section} value={section}>
-                        Section {section}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.section && <p className="text-sm text-red-500">{errors.section[0]}</p>}
-              </div>
+              {formData.grade === "A LEVEL" && (
+                <div className="space-y-2">
+                  <Label htmlFor="section">Section</Label>
+                  <Select
+                    value={formData.section}
+                    onValueChange={(value) => handleSelectChange("section", value)}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select section" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections["A LEVEL"].map((section) => (
+                        <SelectItem key={section} value={section}>
+                          {section}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.section && <p className="text-sm text-red-500">{errors.section[0]}</p>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="name">Class Name</Label>
@@ -197,14 +228,35 @@ export default function AddClass() {
                   disabled={isLoading || isLoadingTeachers}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={isLoadingTeachers ? "Loading teachers..." : "Select teacher"} />
+                    {isLoadingTeachers ? (
+                      <div className="flex items-center">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span>Loading teachers...</span>
+                      </div>
+                    ) : (
+                      <SelectValue placeholder="Select teacher" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
-                    {teachers.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name} - {teacher.user?.name || "Teacher"}
+                    {isLoadingTeachers ? (
+                      <SelectItem value="loading" disabled>
+                        <div className="flex items-center">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <span>Loading...</span>
+                        </div>
                       </SelectItem>
-                    ))}
+                    ) : teachers && teachers.length > 0 ? (
+                      teachers.map((teacher) => (
+                        <SelectItem key={teacher.id} value={teacher.id}>
+                          {/* Display teacher name from the user property */}
+                          {teacher.user?.name || "Unknown Teacher"} - {teacher.department || "Department not specified"}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-teachers" disabled>
+                        No teachers available
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.teacherId && <p className="text-sm text-red-500">{errors.teacherId[0]}</p>}
@@ -223,7 +275,14 @@ export default function AddClass() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Adding..." : "Add Class"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Class"
+                )}
               </Button>
             </div>
           </form>
@@ -232,4 +291,3 @@ export default function AddClass() {
     </div>
   )
 }
-

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,12 +37,12 @@ export default function AdminAttendance() {
     late: 0,
     attendanceRate: 0,
   })
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    limit: 10,
-    pages: 1,
-  })
+
+  // Initialize pagination with default values
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [recordsPerPage, setRecordsPerPage] = useState(10)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -65,15 +65,15 @@ export default function AdminAttendance() {
   const sections = ["A", "B", "C", "D"]
   const statuses = ["Present", "Absent", "Late"]
 
-  // Fetch attendance data
-  const fetchAttendance = async () => {
+  // Fetch attendance data - using useCallback to avoid recreating this function on every render
+  const fetchAttendance = useCallback(async () => {
     setIsLoading(true)
 
     try {
       // Build query params
       const params = new URLSearchParams()
-      params.append("page", pagination.page.toString())
-      params.append("limit", pagination.limit.toString())
+      params.append("page", currentPage.toString())
+      params.append("limit", recordsPerPage.toString())
 
       if (filters.classId) params.append("classId", filters.classId)
       if (filters.grade) params.append("grade", filters.grade)
@@ -81,6 +81,7 @@ export default function AdminAttendance() {
       if (filters.status) params.append("status", filters.status)
       if (filters.startDate) params.append("startDate", filters.startDate)
       if (filters.endDate) params.append("endDate", filters.endDate)
+      if (filters.search) params.append("search", filters.search)
 
       // Fetch attendance data from API
       const response = await fetch(`/api/attendance?${params.toString()}`)
@@ -91,9 +92,24 @@ export default function AdminAttendance() {
 
       const data = await response.json()
 
-      setAttendance(data.attendance)
-      setPagination(data.pagination)
-      setStatistics(data.statistics)
+      // Set attendance data safely
+      setAttendance(Array.isArray(data.attendance) ? data.attendance : [])
+
+      // Update pagination state separately with safe defaults
+      if (data.pagination) {
+        setTotalPages(data.pagination.pages || 1)
+        setTotalRecords(data.pagination.total || 0)
+      } else {
+        // If pagination data is missing, set safe defaults
+        setTotalPages(1)
+        setTotalRecords(0)
+        console.warn("Pagination data is missing from API response")
+      }
+
+      // Set statistics safely
+      if (data.statistics) {
+        setStatistics(data.statistics)
+      }
     } catch (error) {
       console.error("Error fetching attendance:", error)
       toast({
@@ -101,13 +117,17 @@ export default function AdminAttendance() {
         description: "Failed to fetch attendance data. Please try again.",
         variant: "destructive",
       })
+      // Set empty data on error
+      setAttendance([])
+      setTotalPages(1)
+      setTotalRecords(0)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [currentPage, recordsPerPage, filters, toast])
 
   // Fetch classes for filter
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       const response = await fetch("/api/classes")
 
@@ -116,28 +136,33 @@ export default function AdminAttendance() {
       }
 
       const data = await response.json()
-      setClasses(data)
+      setClasses(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error("Error fetching classes:", error)
+      setClasses([])
     }
-  }
+  }, [])
 
   // Initial data fetch
   useEffect(() => {
     fetchClasses()
     fetchAttendance()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Intentionally empty for initial load only
 
-  // Fetch data when pagination or filters change
+  // Refetch when page or filters change
   useEffect(() => {
-    fetchAttendance()
-  }, [pagination.page, pagination.limit, filters])
+    // Skip the initial render
+    if (!isLoading) {
+      fetchAttendance()
+    }
+  }, [currentPage, recordsPerPage, filters, fetchAttendance, isLoading])
 
   // Handle filter changes
   const handleFilterChange = (name: string, value: string) => {
     setFilters((prev) => ({ ...prev, [name]: value }))
     // Reset to first page when filters change
-    setPagination((prev) => ({ ...prev, page: 1 }))
+    setCurrentPage(1)
   }
 
   // Clear all filters
@@ -151,13 +176,13 @@ export default function AdminAttendance() {
       endDate: "",
       search: "",
     })
-    setPagination((prev) => ({ ...prev, page: 1 }))
+    setCurrentPage(1)
   }
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
-    if (newPage > 0 && newPage <= pagination.pages) {
-      setPagination((prev) => ({ ...prev, page: newPage }))
+    if (newPage > 0 && newPage <= totalPages) {
+      setCurrentPage(newPage)
     }
   }
 
@@ -407,9 +432,9 @@ export default function AdminAttendance() {
                         <tbody>
                           {attendance.map((record) => (
                             <tr key={record.id} className="border-t">
-                              <td className="p-2">{`${record.student.firstName} ${record.student.lastName}`}</td>
-                              <td className="p-2">{record.student.class.name}</td>
-                              <td className="p-2">{formatDate(record.date)}</td>
+                              <td className="p-2">{`${record.student?.firstName || "Unknown"} ${record.student?.lastName || ""}`}</td>
+                              <td className="p-2">{record.student?.class?.name || "Unknown"}</td>
+                              <td className="p-2">{record.date ? formatDate(record.date) : "Unknown"}</td>
                               <td className="p-2">
                                 <span
                                   className={`px-2 py-1 rounded-full text-xs ${
@@ -420,7 +445,7 @@ export default function AdminAttendance() {
                                         : "bg-yellow-100 text-yellow-800"
                                   }`}
                                 >
-                                  {record.status}
+                                  {record.status || "Unknown"}
                                 </span>
                               </td>
                               <td className="p-2">
@@ -468,14 +493,14 @@ export default function AdminAttendance() {
 
                     <div className="flex justify-between items-center">
                       <div className="text-sm text-muted-foreground">
-                        Showing {attendance.length} of {pagination.total} records
+                        Showing {attendance.length} of {totalRecords} records
                       </div>
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePageChange(pagination.page - 1)}
-                          disabled={pagination.page === 1}
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -483,7 +508,7 @@ export default function AdminAttendance() {
                           <span className="text-sm">Page</span>
                           <Input
                             className="w-12 h-8"
-                            value={pagination.page}
+                            value={currentPage}
                             onChange={(e) => {
                               const page = Number.parseInt(e.target.value)
                               if (!isNaN(page)) {
@@ -491,13 +516,13 @@ export default function AdminAttendance() {
                               }
                             }}
                           />
-                          <span className="text-sm">of {pagination.pages}</span>
+                          <span className="text-sm">of {totalPages}</span>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePageChange(pagination.page + 1)}
-                          disabled={pagination.page === pagination.pages}
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -564,4 +589,3 @@ export default function AdminAttendance() {
     </div>
   )
 }
-

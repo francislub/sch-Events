@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { getClassById, updateClass } from "@/app/actions/class-actions"
 import { getTeachers } from "@/app/actions/teacher-actions"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 
 export default function EditClassPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -20,8 +20,8 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
 
   const [formData, setFormData] = useState({
     name: "",
-    grade: "",
-    section: "",
+    grade: "", // This will now store the level (O LEVEL, A LEVEL)
+    section: "", // This will now store ARTS or SCIENCES for A LEVEL
     teacherId: "",
   })
 
@@ -30,9 +30,12 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [errors, setErrors] = useState<Record<string, string[]>>({})
 
-  // Available grades and sections
-  const grades = ["7", "8", "9", "10", "11", "12"]
-  const sections = ["A", "B", "C", "D"]
+  // Available levels and sections
+  const levels = ["O LEVEL", "A LEVEL"]
+  const sections = {
+    "A LEVEL": ["ARTS", "SCIENCES"],
+    "O LEVEL": [],
+  }
 
   // Fetch class and teachers data
   useEffect(() => {
@@ -79,13 +82,39 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (name === "grade") {
+      // If changing level, reset section if it's O LEVEL
+      if (value === "O LEVEL") {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          section: "", // Clear section when O LEVEL is selected
+        }))
+      } else {
+        setFormData((prev) => ({ ...prev, [name]: value }))
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }))
+    }
 
-    // Auto-generate class name when grade and section are selected
-    if ((name === "grade" || name === "section") && !formData.name.includes(value)) {
+    // Auto-generate class name when level and section (if applicable) are selected
+    if (name === "grade" || name === "section") {
       const updatedData = { ...formData, [name]: value }
-      if (updatedData.grade && updatedData.section) {
-        setFormData((prev) => ({ ...prev, [name]: value, name: `${updatedData.grade}${updatedData.section}` }))
+
+      if (updatedData.grade === "O LEVEL") {
+        // For O LEVEL, just use "O LEVEL" as the name
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          name: "O LEVEL",
+        }))
+      } else if (updatedData.grade === "A LEVEL" && updatedData.section) {
+        // For A LEVEL, combine level and section (ARTS or SCIENCES)
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          name: `A LEVEL ${updatedData.section}`,
+        }))
       }
     }
   }
@@ -135,7 +164,8 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-lg">Loading class data...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="ml-2 text-lg">Loading class data...</p>
         </div>
       </div>
     )
@@ -163,19 +193,19 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="grade">Grade</Label>
+                <Label htmlFor="grade">Level</Label>
                 <Select
                   value={formData.grade}
                   onValueChange={(value) => handleSelectChange("grade", value)}
                   disabled={isLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select grade" />
+                    <SelectValue placeholder="Select level" />
                   </SelectTrigger>
                   <SelectContent>
-                    {grades.map((grade) => (
-                      <SelectItem key={grade} value={grade}>
-                        Grade {grade}
+                    {levels.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -183,26 +213,28 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
                 {errors.grade && <p className="text-sm text-red-500">{errors.grade[0]}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="section">Section</Label>
-                <Select
-                  value={formData.section}
-                  onValueChange={(value) => handleSelectChange("section", value)}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select section" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sections.map((section) => (
-                      <SelectItem key={section} value={section}>
-                        Section {section}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.section && <p className="text-sm text-red-500">{errors.section[0]}</p>}
-              </div>
+              {formData.grade === "A LEVEL" && (
+                <div className="space-y-2">
+                  <Label htmlFor="section">Section</Label>
+                  <Select
+                    value={formData.section}
+                    onValueChange={(value) => handleSelectChange("section", value)}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select section" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections["A LEVEL"].map((section) => (
+                        <SelectItem key={section} value={section}>
+                          {section}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.section && <p className="text-sm text-red-500">{errors.section[0]}</p>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="name">Class Name</Label>
@@ -230,7 +262,7 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
                   <SelectContent>
                     {teachers.map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name} - {teacher.user?.name || "Teacher"}
+                        {teacher.name} - {teacher.teacher?.specialization || "Teacher"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -251,7 +283,14 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Updating..." : "Update Class"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Class"
+                )}
               </Button>
             </div>
           </form>
@@ -260,4 +299,3 @@ export default function EditClassPage({ params }: { params: { id: string } }) {
     </div>
   )
 }
-

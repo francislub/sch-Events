@@ -19,8 +19,6 @@ export default function MarkAttendance() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
     classId: "",
-    grade: "",
-    section: "",
   })
 
   const [students, setStudents] = useState<any[]>([])
@@ -28,21 +26,27 @@ export default function MarkAttendance() {
   const [attendanceData, setAttendanceData] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-
-  // Mock data for grades and sections
-  const grades = ["7", "8", "9", "10", "11", "12"]
-  const sections = ["A", "B", "C", "D"]
+  const [apiError, setApiError] = useState<string | null>(null)
 
   // Fetch classes
   const fetchClasses = async () => {
     try {
+      setIsLoading(true)
       const response = await fetch("/api/classes")
 
       if (!response.ok) {
-        throw new Error("Failed to fetch classes")
+        throw new Error(`Failed to fetch classes: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log("Classes fetched:", data)
+
+      if (!Array.isArray(data)) {
+        console.error("Classes API did not return an array:", data)
+        setClasses([])
+        return
+      }
+
       setClasses(data)
     } catch (error) {
       console.error("Error fetching classes:", error)
@@ -51,6 +55,9 @@ export default function MarkAttendance() {
         description: "Failed to fetch classes. Please try again.",
         variant: "destructive",
       })
+      setClasses([])
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -59,20 +66,33 @@ export default function MarkAttendance() {
     if (!formData.classId) return
 
     setIsLoading(true)
+    setApiError(null)
 
     try {
       // Build query params
       const params = new URLSearchParams()
       params.append("classId", formData.classId)
 
+      console.log(`Fetching students for class ID: ${formData.classId}`)
+
       // Fetch students from API
       const response = await fetch(`/api/students?${params.toString()}`)
 
       if (!response.ok) {
-        throw new Error("Failed to fetch students")
+        throw new Error(`Failed to fetch students: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log("Students API response:", data)
+
+      // Ensure data is an array
+      if (!Array.isArray(data)) {
+        console.error("Students API did not return an array:", data)
+        setStudents([])
+        setAttendanceData({})
+        setApiError("Invalid response format from server")
+        return
+      }
 
       setStudents(data)
 
@@ -85,11 +105,14 @@ export default function MarkAttendance() {
       setAttendanceData(initialAttendance)
     } catch (error) {
       console.error("Error fetching students:", error)
+      setApiError(error instanceof Error ? error.message : "Failed to fetch students")
       toast({
         title: "Error",
         description: "Failed to fetch students. Please try again.",
         variant: "destructive",
       })
+      setStudents([])
+      setAttendanceData({})
     } finally {
       setIsLoading(false)
     }
@@ -128,6 +151,16 @@ export default function MarkAttendance() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (students.length === 0) {
+      toast({
+        title: "No Students",
+        description: "There are no students to mark attendance for.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSaving(true)
 
     try {
@@ -176,6 +209,12 @@ export default function MarkAttendance() {
     setAttendanceData(updatedAttendance)
   }
 
+  // Debug function to show raw student data
+  const debugStudents = () => {
+    console.log("Current students state:", students)
+    return JSON.stringify(students, null, 2)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -209,17 +248,23 @@ export default function MarkAttendance() {
                 <Select
                   value={formData.classId}
                   onValueChange={(value) => handleSelectChange("classId", value)}
-                  disabled={isSaving}
+                  disabled={isSaving || isLoading}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
-                    {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
-                        {cls.name}
+                    {classes.length > 0 ? (
+                      classes.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-classes" disabled>
+                        No classes available
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -227,6 +272,13 @@ export default function MarkAttendance() {
 
             {isLoading ? (
               <div className="text-center py-8">Loading students...</div>
+            ) : apiError ? (
+              <div className="text-center py-8 text-red-500">
+                <p>Error: {apiError}</p>
+                <Button type="button" variant="outline" className="mt-4" onClick={fetchStudents}>
+                  Try Again
+                </Button>
+              </div>
             ) : students.length > 0 ? (
               <div className="space-y-4">
                 <div className="flex justify-end space-x-2">
@@ -253,8 +305,8 @@ export default function MarkAttendance() {
                     <tbody>
                       {students.map((student) => (
                         <tr key={student.id} className="border-t">
-                          <td className="p-2">{`${student.firstName} ${student.lastName}`}</td>
-                          <td className="p-2">{student.class.name}</td>
+                          <td className="p-2">{`${student.firstName || "Unknown"} ${student.lastName || ""}`}</td>
+                          <td className="p-2">{student.class?.name || "Unknown"}</td>
                           <td className="p-2">
                             <Select
                               value={attendanceData[student.id] || "Present"}
@@ -292,7 +344,12 @@ export default function MarkAttendance() {
                 </div>
               </div>
             ) : formData.classId ? (
-              <div className="text-center py-8 text-muted-foreground">No students found in this class.</div>
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No students found in this class.</p>
+                <Button type="button" variant="outline" className="mt-4" onClick={fetchStudents}>
+                  Refresh
+                </Button>
+              </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">Please select a class to view students.</div>
             )}
@@ -302,4 +359,3 @@ export default function MarkAttendance() {
     </div>
   )
 }
-

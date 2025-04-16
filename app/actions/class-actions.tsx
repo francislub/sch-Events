@@ -9,8 +9,8 @@ import { z } from "zod"
 // Define validation schema
 const classSchema = z.object({
   name: z.string().min(1, { message: "Class name is required" }),
-  grade: z.string().min(1, { message: "Grade is required" }),
-  section: z.string().min(1, { message: "Section is required" }),
+  grade: z.string().min(1, { message: "Level is required" }),
+  section: z.string().optional(), // Section is only required for A LEVEL
   teacherId: z.string().min(1, { message: "Teacher ID is required" }),
 })
 
@@ -38,10 +38,12 @@ export async function addClass(formData: FormData) {
   }
 
   // Extract and validate form data
+  const level = formData.get("grade") as string
+  const section = formData.get("section") as string
   const rawData = {
     name: formData.get("name") as string,
-    grade: formData.get("grade") as string,
-    section: formData.get("section") as string,
+    grade: level,
+    section: level === "O LEVEL" ? "" : section, // Section is only required for A LEVEL
     teacherId: formData.get("teacherId") as string,
   }
 
@@ -52,6 +54,16 @@ export async function addClass(formData: FormData) {
     return {
       success: false,
       errors: validationResult.error.flatten().fieldErrors,
+    }
+  }
+
+  // Additional validation for A LEVEL to ensure section is provided
+  if (level === "A LEVEL" && !section) {
+    return {
+      success: false,
+      errors: {
+        section: ["Section is required for A LEVEL classes"],
+      },
     }
   }
 
@@ -281,10 +293,12 @@ export async function updateClass(id: string, formData: FormData) {
   }
 
   // Extract and validate form data
+  const level = formData.get("grade") as string
+  const section = formData.get("section") as string
   const rawData = {
     name: formData.get("name") as string,
-    grade: formData.get("grade") as string,
-    section: formData.get("section") as string,
+    grade: level,
+    section: level === "O LEVEL" ? "" : section, // Section is only required for A LEVEL
     teacherId: formData.get("teacherId") as string,
   }
 
@@ -295,6 +309,16 @@ export async function updateClass(id: string, formData: FormData) {
     return {
       success: false,
       errors: validationResult.error.flatten().fieldErrors,
+    }
+  }
+
+  // Additional validation for A LEVEL to ensure section is provided
+  if (level === "A LEVEL" && !section) {
+    return {
+      success: false,
+      errors: {
+        section: ["Section is required for A LEVEL classes"],
+      },
     }
   }
 
@@ -419,4 +443,3 @@ export async function deleteClass(id: string) {
     }
   }
 }
-
