@@ -146,11 +146,11 @@ export default function Sidebar({ role = "admin", userName = "User" }: SidebarPr
         href: "/dashboard/student/attendance",
         icon: ClipboardList
       },
-      {
-        title: "Schedule",
-        href: "/dashboard/student/schedule",
-        icon: Calendar
-      }
+      // {
+      //   title: "Schedule",
+      //   href: "/dashboard/student/schedule",
+      //   icon: Calendar
+      // }
     )
   }
   
