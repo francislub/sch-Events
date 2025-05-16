@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
+// GET messages for the current user
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -11,47 +12,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const conversationWith = searchParams.get("conversationWith")
-    const limit = searchParams.get("limit") ? Number.parseInt(searchParams.get("limit") as string, 10) : 50
+    const userId = session.user.id
 
-    if (!conversationWith) {
-      return NextResponse.json({ error: "Missing conversationWith parameter" }, { status: 400 })
-    }
-
-    // Get current user ID
-    const currentUser = await db.user.findUnique({
-      where: { email: session.user?.email as string },
-    })
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    // Get messages between current user and the specified user
+    // Get all messages where the user is either sender or receiver
     const messages = await db.message.findMany({
       where: {
-        OR: [
-          {
-            senderId: currentUser.id,
-            receiverId: conversationWith,
-          },
-          {
-            senderId: conversationWith,
-            receiverId: currentUser.id,
-          },
-        ],
+        OR: [{ senderId: userId }, { receiverId: userId }],
       },
-      orderBy: {
-        createdAt: "asc",
-      },
-      take: limit,
       include: {
         sender: {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
@@ -59,99 +31,37 @@ export async function GET(req: Request) {
           select: {
             id: true,
             name: true,
-            email: true,
             role: true,
           },
         },
       },
+      orderBy: {
+        createdAt: "asc",
+      },
     })
 
-    // Mark messages as read
-    const unreadMessages = messages.filter((message) => message.receiverId === currentUser.id && !message.isRead)
-
-    if (unreadMessages.length > 0) {
-      await db.message.updateMany({
-        where: {
-          id: {
-            in: unreadMessages.map((message) => message.id),
-          },
-        },
-        data: {
-          isRead: true,
-        },
-      })
-    }
-
     // Format messages for the frontend
-    const formattedMessages = messages.map((message) => ({
-      id: message.id,
-      content: message.content,
-      isRead: message.isRead,
-      sender: {
-        id: message.sender.id,
-        name: message.sender.name,
-        email: message.sender.email,
-        role: message.sender.role,
-      },
-      receiver: {
-        id: message.receiver.id,
-        name: message.receiver.name,
-        email: message.receiver.email,
-        role: message.receiver.role,
-      },
-      createdAt: message.createdAt,
-      isMine: message.senderId === currentUser.id,
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      content: msg.content,
+      senderId: msg.senderId,
+      senderName: msg.sender.name,
+      receiverId: msg.receiverId,
+      receiverName: msg.receiver.name,
+      isRead: msg.isRead,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+      currentUserId: userId, // Add this to help frontend determine message direction
     }))
 
     return NextResponse.json(formattedMessages)
   } catch (error) {
-    // Safely log error without trying to stringify the entire error object
-    console.error("Error fetching messages:", error instanceof Error ? error.message : "Unknown error")
-
-    // Return mock data for development
-    return NextResponse.json([
-      {
-        id: "mock1",
-        content: "Hello, how can I help you today?",
-        isRead: true,
-        sender: {
-          id: "teacher1",
-          name: "Ms. Johnson",
-          email: "teacher@example.com",
-          role: "TEACHER",
-        },
-        receiver: {
-          id: "parent1",
-          name: "Parent User",
-          email: "parent@example.com",
-          role: "PARENT",
-        },
-        createdAt: new Date(Date.now() - 3600000),
-        isMine: false,
-      },
-      {
-        id: "mock2",
-        content: "I wanted to discuss my child's recent test results.",
-        isRead: true,
-        sender: {
-          id: "parent1",
-          name: "Parent User",
-          email: "parent@example.com",
-          role: "PARENT",
-        },
-        receiver: {
-          id: "teacher1",
-          name: "Ms. Johnson",
-          email: "teacher@example.com",
-          role: "TEACHER",
-        },
-        createdAt: new Date(Date.now() - 3500000),
-        isMine: true,
-      },
-    ])
+    console.error("Error fetching messages:", error)
+    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 })
   }
 }
 
+// POST a new message
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -160,35 +70,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get request body
-    let body
-    try {
-      body = await req.json()
-    } catch (parseError) {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    const { recipientId, content } = await req.json()
+
+    if (!recipientId || !content) {
+      return NextResponse.json({ error: "Recipient ID and content are required" }, { status: 400 })
     }
 
-    const { content, receiverId } = body
+    const senderId = session.user.id
 
-    if (!content || !receiverId) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // Get current user
-    const currentUser = await db.user.findUnique({
-      where: { email: session.user?.email as string },
-    })
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    // Create message
+    // Create the message
     const message = await db.message.create({
       data: {
         content,
-        senderId: currentUser.id,
-        receiverId,
+        senderId,
+        receiverId: recipientId,
         isRead: false,
       },
       include: {
@@ -196,47 +91,35 @@ export async function POST(req: Request) {
           select: {
             id: true,
             name: true,
-            email: true,
-            role: true,
           },
         },
         receiver: {
           select: {
             id: true,
             name: true,
-            email: true,
-            role: true,
           },
         },
       },
     })
 
-    // Format message for the frontend
+    // Format the message for the frontend
     const formattedMessage = {
       id: message.id,
       content: message.content,
+      senderId: message.senderId,
+      senderName: message.sender.name,
+      receiverId: message.receiverId,
+      receiverName: message.receiver.name,
       isRead: message.isRead,
-      sender: {
-        id: message.sender.id,
-        name: message.sender.name,
-        email: message.sender.email,
-        role: message.sender.role,
-      },
-      receiver: {
-        id: message.receiver.id,
-        name: message.receiver.name,
-        email: message.receiver.email,
-        role: message.receiver.role,
-      },
       createdAt: message.createdAt,
-      isMine: true,
+      updatedAt: message.updatedAt,
+      currentUserId: senderId,
     }
 
     return NextResponse.json(formattedMessage)
   } catch (error) {
-    // Safely log error without trying to stringify the entire error object
-    console.error("Error sending message:", error instanceof Error ? error.message : "Unknown error")
-
+    console.error("Error sending message:", error)
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
   }
 }
+
