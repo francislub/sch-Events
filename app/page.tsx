@@ -10,7 +10,7 @@ export default function Home() {
       <header className="bg-white border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <GraduationCap className="h-8 w-8 text-primary" />
+          <img src="/logo.jpg" alt="School Logo" className="h-12 w-12 object-contain" />
             <h1 className="text-2xl font-bold">Wobulenzi High School</h1>
           </div>
           <div className="flex items-center space-x-4">

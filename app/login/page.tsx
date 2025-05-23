@@ -159,7 +159,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center space-y-2 text-center">
-          <School className="h-12 w-12 text-primary" />
+        <img src="/logo.jpg" alt="School Logo" className="h-12 w-12 object-contain" />
           <h1 className="text-3xl font-bold">{isAdminRole ? "Admin Registration" : " Wobulenzi High School"}</h1>
           <p className="text-sm text-muted-foreground">
             {isAdminRole ? "Create a new administrator account" : "Sign in to access your school management dashboard"}
