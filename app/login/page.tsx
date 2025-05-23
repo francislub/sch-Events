@@ -160,7 +160,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center space-y-2 text-center">
           <School className="h-12 w-12 text-primary" />
-          <h1 className="text-3xl font-bold">{isAdminRole ? "Admin Registration" : "Welcome Back"}</h1>
+          <h1 className="text-3xl font-bold">{isAdminRole ? "Admin Registration" : " Wobulenzi High School"}</h1>
           <p className="text-sm text-muted-foreground">
             {isAdminRole ? "Create a new administrator account" : "Sign in to access your school management dashboard"}
           </p>
