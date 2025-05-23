@@ -3,8 +3,8 @@ import { NextAuthProvider } from "@/components/providers/session-provider"
 import "./globals.css"
 
 export const metadata = {
-  title: "School Management System",
-  description: "A comprehensive school management system",
+  title: "Wobulenzi High School",
+  description: "A comprehensive school management system for Wobulenzi High School",
 }
 
 export default function RootLayout({

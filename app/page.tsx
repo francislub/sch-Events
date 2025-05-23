@@ -11,7 +11,7 @@ export default function Home() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold">School Management System</h1>
+            <h1 className="text-2xl font-bold">Wobulenzi High School</h1>
           </div>
           <div className="flex items-center space-x-4">
             <Link href="/login">
@@ -27,7 +27,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-20">
         <div className="container mx-auto px-4 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-6">Welcome to Our School Management System</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-6">Welcome to Wobulenzi High School</h1>
           <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto">
             A comprehensive solution for managing students, teachers, classes, and more.
           </p>
@@ -145,7 +145,7 @@ export default function Home() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 bg-white">
+      {/* <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">Our School at a Glance</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
@@ -167,10 +167,10 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white py-12 mt-auto">
+      {/* <footer className="bg-gray-800 text-white py-12 mt-auto">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
@@ -223,7 +223,7 @@ export default function Home() {
             <p>&copy; {new Date().getFullYear()} School Management System. All rights reserved.</p>
           </div>
         </div>
-      </footer>
+      </footer> */}
     </div>
   )
 }
