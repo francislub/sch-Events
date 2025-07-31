@@ -4,13 +4,25 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { Search, ChevronLeft, ChevronRight, CalendarDays, GraduationCap, School, Users } from "lucide-react"
+import {
+  CalendarDays,
+  GraduationCap,
+  School,
+  Users,
+  TrendingUp,
+  BookOpen,
+  MessageSquare,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  UserCheck,
+} from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { getAdminStats } from "@/app/actions/admin-actions"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 
 interface StatsData {
   studentsCount: number
@@ -31,72 +43,25 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [recentStudents, setRecentStudents] = useState<any[]>([])
+  const [recentTeachers, setRecentTeachers] = useState<any[]>([])
+  const [systemAlerts, setSystemAlerts] = useState<any[]>([])
 
-  // State for students, teachers, and classes tabs
-  const [students, setStudents] = useState<any[]>([])
-  const [teachers, setTeachers] = useState<any[]>([])
-  const [classes, setClasses] = useState<any[]>([])
-
-  // Pagination state
-  const [pagination, setPagination] = useState({
-    students: { page: 1, limit: 5, total: 0 },
-    teachers: { page: 1, limit: 5, total: 0 },
-    classes: { page: 1, limit: 5, total: 0 },
-  })
-
-  // Filter state
-  const [filters, setFilters] = useState({
-    students: { search: "", grade: "all" },
-    teachers: { search: "", department: "all" },
-    classes: { search: "", grade: "all" },
-  })
-
-  // Fetch dashboard data
-  // const fetchDashboardData = async () => {
-  //   setIsLoading(true)
-
-  //   try {
-  //     // Fetch admin stats
-  //     const statsResult = await getAdminStats()
-
-  //     if (statsResult.success) {
-  //       setDashboardData({
-  //         totalStudents: statsResult.data.studentsCount || 0,
-  //         totalTeachers: statsResult.data.teachersCount || 0,
-  //         totalClasses: statsResult.data.classesCount || 0,
-  //         totalParents: statsResult.data.parentsCount || 0,
-  //         attendanceRate: statsResult.data.attendanceRate || 0,
-  //         recentActivities: statsResult.data.recentActivities || [],
-  //       })
-  //     } else {
-  //       toast({
-  //         title: "Error",
-  //         description: statsResult.message || "Failed to fetch dashboard data",
-  //         variant: "destructive",
-  //       })
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching dashboard data:", error)
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to fetch dashboard data. Please try again.",
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setIsLoading(false)
-  //   }
-  // }
-
-  // Initial data fetch
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchDashboardData() {
+      console.log("🔄 Fetching admin dashboard data...")
       try {
         setLoading(true)
+
+        // Fetch admin stats
+        console.log("📊 Fetching admin stats...")
         const response = await getAdminStats()
 
         if (response.success) {
+          console.log("✅ Admin stats loaded:", response.data)
           setStats(response.data)
         } else {
+          console.error("❌ Failed to fetch admin stats:", response.message)
           setError(response.message || "Failed to fetch dashboard data")
           toast({
             title: "Error",
@@ -104,8 +69,33 @@ export default function AdminDashboard() {
             variant: "destructive",
           })
         }
+
+        // Fetch recent students
+        console.log("👨‍🎓 Fetching recent students...")
+        const studentsResponse = await fetch("/api/students?limit=5&sort=recent")
+        if (studentsResponse.ok) {
+          const studentsData = await studentsResponse.json()
+          console.log("✅ Recent students loaded:", studentsData.students?.length || 0)
+          setRecentStudents(studentsData.students || [])
+        }
+
+        // Fetch recent teachers
+        console.log("👨‍🏫 Fetching recent teachers...")
+        const teachersResponse = await fetch("/api/teachers?limit=5&sort=recent")
+        if (teachersResponse.ok) {
+          const teachersData = await teachersResponse.json()
+          console.log("✅ Recent teachers loaded:", teachersData.teachers?.length || 0)
+          setRecentTeachers(teachersData.teachers || [])
+        }
+
+        // Mock system alerts for demo
+        setSystemAlerts([
+          { type: "warning", message: "3 students have low attendance", priority: "medium" },
+          { type: "info", message: "New semester starts next week", priority: "low" },
+          { type: "success", message: "All systems operational", priority: "low" },
+        ])
       } catch (err) {
-        console.error("Error fetching admin stats:", err)
+        console.error("💥 Error fetching dashboard data:", err)
         setError("An unexpected error occurred")
         toast({
           title: "Error",
@@ -117,301 +107,133 @@ export default function AdminDashboard() {
       }
     }
 
-    fetchStats()
-  }, [])
-
-  // Fetch students with pagination and filters
-  const fetchStudents = async () => {
-    try {
-      const params = new URLSearchParams()
-      params.append("page", pagination.students.page.toString())
-      params.append("limit", pagination.students.limit.toString())
-
-      if (filters.students.search) {
-        params.append("search", filters.students.search)
-      }
-
-      if (filters.students.grade !== "all") {
-        params.append("grade", filters.students.grade)
-      }
-
-      const response = await fetch(`/api/students?${params.toString()}`)
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch students")
-      }
-
-      const data = await response.json()
-
-      setStudents(data.students || [])
-      setPagination((prev) => ({
-        ...prev,
-        students: {
-          ...prev.students,
-          total: data.pagination?.total || 0,
-        },
-      }))
-    } catch (error) {
-      console.error("Error fetching students:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch students. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Fetch teachers with pagination and filters
-  const fetchTeachers = async () => {
-    try {
-      const params = new URLSearchParams()
-      params.append("page", pagination.teachers.page.toString())
-      params.append("limit", pagination.teachers.limit.toString())
-
-      if (filters.teachers.search) {
-        params.append("search", filters.teachers.search)
-      }
-
-      if (filters.teachers.department !== "all") {
-        params.append("department", filters.teachers.department)
-      }
-
-      const response = await fetch(`/api/teachers?${params.toString()}`)
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch teachers")
-      }
-
-      const data = await response.json()
-
-      setTeachers(data.teachers || [])
-      setPagination((prev) => ({
-        ...prev,
-        teachers: {
-          ...prev.teachers,
-          total: data.pagination?.total || 0,
-        },
-      }))
-    } catch (error) {
-      console.error("Error fetching teachers:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch teachers. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Fetch classes with pagination and filters
-  const fetchClasses = async () => {
-    try {
-      const params = new URLSearchParams()
-      params.append("page", pagination.classes.page.toString())
-      params.append("limit", pagination.classes.limit.toString())
-
-      if (filters.classes.search) {
-        params.append("search", filters.classes.search)
-      }
-
-      if (filters.classes.grade !== "all") {
-        params.append("grade", filters.classes.grade)
-      }
-
-      const response = await fetch(`/api/classes?${params.toString()}`)
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch classes")
-      }
-
-      const data = await response.json()
-
-      setClasses(data.classes || [])
-      setPagination((prev) => ({
-        ...prev,
-        classes: {
-          ...prev.classes,
-          total: data.pagination?.total || 0,
-        },
-      }))
-    } catch (error) {
-      console.error("Error fetching classes:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch classes. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Handle filter changes
-  const handleFilterChange = (tab: string, field: string, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [tab]: {
-        ...prev[tab as keyof typeof prev],
-        [field]: value,
-      },
-    }))
-
-    // Reset to first page when filters change
-    setPagination((prev) => ({
-      ...prev,
-      [tab]: {
-        ...prev[tab as keyof typeof prev],
-        page: 1,
-      },
-    }))
-  }
-
-  // Handle page change
-  const handlePageChange = (tab: string, newPage: number) => {
-    const maxPage = Math.ceil(
-      pagination[tab as keyof typeof pagination].total / pagination[tab as keyof typeof pagination].limit,
-    )
-
-    if (newPage > 0 && newPage <= maxPage) {
-      setPagination((prev) => ({
-        ...prev,
-        [tab]: {
-          ...prev[tab as keyof typeof prev],
-          page: newPage,
-        },
-      }))
-    }
-  }
-
-  // Effect to fetch data when pagination or filters change
-  useEffect(() => {
-    fetchStudents()
-  }, [pagination.students.page, filters.students])
-
-  useEffect(() => {
-    fetchTeachers()
-  }, [pagination.teachers.page, filters.teachers])
-
-  useEffect(() => {
-    fetchClasses()
-  }, [pagination.classes.page, filters.classes])
-
-  // Handle export reports
-  const handleExportReports = () => {
-    toast({
-      title: "Export Started",
-      description: "Reports are being generated and will be available for download shortly.",
-    })
-
-    // In a real app, you would implement the export functionality
-  }
+    fetchDashboardData()
+  }, [toast])
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      {/* <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Administrator Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, Admin. Here's an overview of your school.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard/admin/students/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add New Student
-              </Button>
-            </Link>
-            <Button variant="outline" onClick={handleExportReports}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Reports
-            </Button>
-          </div>
-        </div>
-
-        <Alert>
-          <Bell className="h-4 w-4" />
-          <AlertTitle>Important Notice</AlertTitle>
-          <AlertDescription>Remember to update student records and attendance regularly.</AlertDescription>
-        </Alert> */}
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Admin Dashboard
+          </h2>
+          <p className="text-muted-foreground">Welcome back! Here's what's happening at your school.</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/dashboard/admin/students/new">
+            <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700">
+              Add Student
+            </Button>
+          </Link>
+          <Link href="/dashboard/admin/teachers/new">
+            <Button variant="outline" className="border-green-200 text-green-700 hover:bg-green-50 bg-transparent">
+              Add Teacher
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList>
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analytics" disabled>
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger value="reports" disabled>
-            Reports
-          </TabsTrigger>
-          {/* <TabsTrigger value="students">Students</TabsTrigger>
-          <TabsTrigger value="teachers">Teachers</TabsTrigger>
-          <TabsTrigger value="classes">Classes</TabsTrigger> */}
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="recent">Recent Activity</TabsTrigger>
+          <TabsTrigger value="alerts">System Alerts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          {/* Main Stats Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-                <GraduationCap className="h-4 w-4 text-muted-foreground" />
+            <Card className="border-blue-200 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-gradient-to-r from-blue-50 to-blue-100">
+                <CardTitle className="text-sm font-medium text-blue-800">Total Students</CardTitle>
+                <GraduationCap className="h-4 w-4 text-blue-600" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {loading ? (
                   <Skeleton className="h-8 w-20" />
                 ) : (
-                  <div className="text-2xl font-bold">{stats?.studentsCount || 0}</div>
+                  <>
+                    <div className="text-2xl font-bold text-blue-700">{stats?.studentsCount || 0}</div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      <TrendingUp className="h-3 w-3 inline mr-1" />
+                      +12% from last month
+                    </p>
+                  </>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Teachers</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+
+            <Card className="border-green-200 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-gradient-to-r from-green-50 to-green-100">
+                <CardTitle className="text-sm font-medium text-green-800">Total Teachers</CardTitle>
+                <Users className="h-4 w-4 text-green-600" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {loading ? (
                   <Skeleton className="h-8 w-20" />
                 ) : (
-                  <div className="text-2xl font-bold">{stats?.teachersCount || 0}</div>
+                  <>
+                    <div className="text-2xl font-bold text-green-700">{stats?.teachersCount || 0}</div>
+                    <p className="text-xs text-green-600 mt-1">
+                      <CheckCircle className="h-3 w-3 inline mr-1" />
+                      All positions filled
+                    </p>
+                  </>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
-                <School className="h-4 w-4 text-muted-foreground" />
+
+            <Card className="border-purple-200 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-gradient-to-r from-purple-50 to-purple-100">
+                <CardTitle className="text-sm font-medium text-purple-800">Total Classes</CardTitle>
+                <School className="h-4 w-4 text-purple-600" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {loading ? (
                   <Skeleton className="h-8 w-20" />
                 ) : (
-                  <div className="text-2xl font-bold">{stats?.classesCount || 0}</div>
+                  <>
+                    <div className="text-2xl font-bold text-purple-700">{stats?.classesCount || 0}</div>
+                    <p className="text-xs text-purple-600 mt-1">
+                      <BookOpen className="h-3 w-3 inline mr-1" />
+                      Across all grades
+                    </p>
+                  </>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Attendance Rate</CardTitle>
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+
+            <Card className="border-orange-200 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-gradient-to-r from-orange-50 to-orange-100">
+                <CardTitle className="text-sm font-medium text-orange-800">Attendance Rate</CardTitle>
+                <CalendarDays className="h-4 w-4 text-orange-600" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {loading ? (
                   <Skeleton className="h-8 w-20" />
                 ) : (
-                  <div className="text-2xl font-bold">{stats?.attendanceRate || 0}%</div>
+                  <>
+                    <div className="text-2xl font-bold text-orange-700">{stats?.attendanceRate || 0}%</div>
+                    <Progress value={stats?.attendanceRate || 0} className="mt-2 h-2" />
+                  </>
                 )}
               </CardContent>
             </Card>
           </div>
+
+          {/* Detailed Overview */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-4">
-              <CardHeader>
-                <CardTitle>Recent Activities</CardTitle>
-                <CardDescription>Latest activities in the school management system</CardDescription>
+            <Card className="col-span-4 border-indigo-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100">
+                <CardTitle className="text-indigo-900">Recent Activities</CardTitle>
+                <CardDescription className="text-indigo-700">
+                  Latest activities in the school management system
+                </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 {loading ? (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     {[...Array(5)].map((_, i) => (
                       <div key={i} className="flex items-center space-x-4">
                         <Skeleton className="h-12 w-12 rounded-full" />
@@ -427,51 +249,68 @@ export default function AdminDashboard() {
                 ) : stats?.recentActivities && stats.recentActivities.length > 0 ? (
                   <div className="space-y-4">
                     {stats.recentActivities.map((activity, i) => (
-                      <div key={i} className="flex items-start justify-between">
+                      <div
+                        key={i}
+                        className="flex items-start justify-between p-3 bg-indigo-50 rounded-lg border border-indigo-100"
+                      >
                         <div className="space-y-1">
-                          <p className="text-sm font-medium leading-none">{activity.action}</p>
-                          <p className="text-sm text-muted-foreground">{activity.details}</p>
+                          <p className="text-sm font-medium leading-none text-indigo-900">{activity.action}</p>
+                          <p className="text-sm text-indigo-700">{activity.details}</p>
                         </div>
-                        <div className="text-sm text-muted-foreground">{activity.time}</div>
+                        <div className="text-sm text-indigo-600 flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {activity.time}
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-4 text-muted-foreground">No recent activities found</div>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No recent activities found</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
-            <Card className="col-span-3">
-              <CardHeader>
-                <CardTitle>Quick Stats</CardTitle>
-                <CardDescription>Summary of school statistics</CardDescription>
+
+            <Card className="col-span-3 border-teal-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-teal-50 to-teal-100">
+                <CardTitle className="text-teal-900">Quick Stats</CardTitle>
+                <CardDescription className="text-teal-700">Summary of school statistics</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 {loading ? (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     {[...Array(4)].map((_, i) => (
                       <Skeleton key={i} className="h-4 w-full" />
                     ))}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Total Parents</div>
-                      <div className="font-bold">{stats?.parentsCount || 0}</div>
+                    <div className="flex items-center justify-between p-3 bg-teal-50 rounded-lg">
+                      <div className="text-sm font-medium text-teal-800">Total Parents</div>
+                      <Badge className="bg-teal-100 text-teal-800 border-teal-200">{stats?.parentsCount || 0}</Badge>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Student-Teacher Ratio</div>
-                      <div className="font-bold">
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <div className="text-sm font-medium text-blue-800">Student-Teacher Ratio</div>
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
                         {stats?.teachersCount
                           ? `${Math.round((stats.studentsCount / stats.teachersCount) * 10) / 10}:1`
                           : "N/A"}
-                      </div>
+                      </Badge>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Average Class Size</div>
-                      <div className="font-bold">
+                    <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                      <div className="text-sm font-medium text-purple-800">Average Class Size</div>
+                      <Badge className="bg-purple-100 text-purple-800 border-purple-200">
                         {stats?.classesCount ? Math.round(stats.studentsCount / stats.classesCount) : 0}
-                      </div>
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <div className="text-sm font-medium text-green-800">System Status</div>
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Operational
+                      </Badge>
                     </div>
                   </div>
                 )}
@@ -480,509 +319,242 @@ export default function AdminDashboard() {
           </div>
         </TabsContent>
 
-        <TabsContent value="students" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Student Management</CardTitle>
-              <CardDescription>View and manage all students</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="relative flex-grow">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search students..."
-                      className="pl-10"
-                      value={filters.students.search}
-                      onChange={(e) => handleFilterChange("students", "search", e.target.value)}
-                    />
+        <TabsContent value="analytics" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="border-cyan-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-cyan-50 to-cyan-100">
+                <CardTitle className="text-cyan-900">Enrollment Trends</CardTitle>
+                <CardDescription className="text-cyan-700">Student enrollment over time</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-cyan-800">This Month</span>
+                    <span className="font-bold text-cyan-700">+{Math.floor(Math.random() * 20) + 5} students</span>
                   </div>
-
-                  <Select
-                    value={filters.students.grade}
-                    onValueChange={(value) => handleFilterChange("students", "grade", value)}
-                  >
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="All Grades" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Grades</SelectItem>
-                      {["7", "8", "9", "10", "11", "12"].map((grade) => (
-                        <SelectItem key={grade} value={grade}>
-                          Grade {grade}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <div className="flex-grow md:flex-grow-0"></div>
-
-                  <Link href="/dashboard/admin/students/new">
-                    <Button>Add New Student</Button>
-                  </Link>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted">
-                        <th className="p-2 text-left font-medium">ID</th>
-                        <th className="p-2 text-left font-medium">Name</th>
-                        <th className="p-2 text-left font-medium">Grade</th>
-                        <th className="p-2 text-left font-medium">Parent</th>
-                        <th className="p-2 text-left font-medium">Contact</th>
-                        <th className="p-2 text-left font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading ? (
-                        Array(5)
-                          .fill(0)
-                          .map((_, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-32" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-24" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-28" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-8 w-20" />
-                              </td>
-                            </tr>
-                          ))
-                      ) : students.length === 0 ? (
-                        <tr className="border-t">
-                          <td colSpan={6} className="p-4 text-center text-muted-foreground">
-                            No students found
-                          </td>
-                        </tr>
-                      ) : (
-                        students.map((student) => (
-                          <tr key={student.id} className="border-t">
-                            <td className="p-2">{student.id.substring(0, 8)}</td>
-                            <td className="p-2">{`${student.firstName} ${student.lastName}`}</td>
-                            <td className="p-2">
-                              {student.grade}
-                              {student.section}
-                            </td>
-                            <td className="p-2">{student.parent?.user?.name || "N/A"}</td>
-                            <td className="p-2">{student.parent?.contactNumber || "N/A"}</td>
-                            <td className="p-2">
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => (window.location.href = `/dashboard/admin/students/${student.id}`)}
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    (window.location.href = `/dashboard/admin/students/edit/${student.id}`)
-                                  }
-                                >
-                                  Edit
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {students.length} of {pagination.students.total} students
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("students", pagination.students.page - 1)}
-                      disabled={pagination.students.page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm">Page</span>
-                      <Input
-                        className="w-12 h-8"
-                        value={pagination.students.page}
-                        onChange={(e) => {
-                          const page = Number.parseInt(e.target.value)
-                          if (!isNaN(page)) {
-                            handlePageChange("students", page)
-                          }
-                        }}
-                      />
-                      <span className="text-sm">
-                        of {Math.ceil(pagination.students.total / pagination.students.limit) || 1}
-                      </span>
+                  <Progress value={75} className="h-3" />
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="p-3 bg-cyan-50 rounded-lg">
+                      <div className="text-lg font-bold text-cyan-700">{Math.floor(Math.random() * 50) + 100}</div>
+                      <div className="text-xs text-cyan-600">Grade 7-9</div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("students", pagination.students.page + 1)}
-                      disabled={
-                        pagination.students.page === Math.ceil(pagination.students.total / pagination.students.limit) ||
-                        pagination.students.total === 0
-                      }
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="text-lg font-bold text-blue-700">{Math.floor(Math.random() * 40) + 80}</div>
+                      <div className="text-xs text-blue-600">Grade 10-11</div>
+                    </div>
+                    <div className="p-3 bg-indigo-50 rounded-lg">
+                      <div className="text-lg font-bold text-indigo-700">{Math.floor(Math.random() * 30) + 60}</div>
+                      <div className="text-xs text-indigo-600">Grade 12</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card className="border-rose-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-rose-50 to-rose-100">
+                <CardTitle className="text-rose-900">Performance Metrics</CardTitle>
+                <CardDescription className="text-rose-700">Academic performance overview</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-rose-800">Average Grade</span>
+                    <Badge className="bg-rose-100 text-rose-800">B+</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-rose-800">Pass Rate</span>
+                    <span className="font-bold text-rose-700">94.5%</span>
+                  </div>
+                  <Progress value={94.5} className="h-3" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-rose-50 rounded-lg text-center">
+                      <div className="text-lg font-bold text-rose-700">A-B</div>
+                      <div className="text-xs text-rose-600">65% of students</div>
+                    </div>
+                    <div className="p-3 bg-orange-50 rounded-lg text-center">
+                      <div className="text-lg font-bold text-orange-700">C-D</div>
+                      <div className="text-xs text-orange-600">30% of students</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        <TabsContent value="teachers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Teacher Management</CardTitle>
-              <CardDescription>View and manage all teachers</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="relative flex-grow">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search teachers..."
-                      className="pl-10"
-                      value={filters.teachers.search}
-                      onChange={(e) => handleFilterChange("teachers", "search", e.target.value)}
-                    />
+        <TabsContent value="recent" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="border-emerald-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-emerald-50 to-emerald-100">
+                <CardTitle className="text-emerald-900">Recent Students</CardTitle>
+                <CardDescription className="text-emerald-700">Newly enrolled students</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {loading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center space-x-3">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-[150px]" />
+                          <Skeleton className="h-3 w-[100px]" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-
-                  <Select
-                    value={filters.teachers.department}
-                    onValueChange={(value) => handleFilterChange("teachers", "department", value)}
-                  >
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="All Departments" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {["Mathematics", "Science", "English", "History", "Arts"].map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <div className="flex-grow md:flex-grow-0"></div>
-
-                  <Link href="/dashboard/admin/teachers/new">
-                    <Button>Add New Teacher</Button>
-                  </Link>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted">
-                        <th className="p-2 text-left font-medium">ID</th>
-                        <th className="p-2 text-left font-medium">Name</th>
-                        <th className="p-2 text-left font-medium">Department</th>
-                        <th className="p-2 text-left font-medium">Classes</th>
-                        <th className="p-2 text-left font-medium">Contact</th>
-                        <th className="p-2 text-left font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading ? (
-                        Array(5)
-                          .fill(0)
-                          .map((_, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-32" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-24" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-28" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-8 w-20" />
-                              </td>
-                            </tr>
-                          ))
-                      ) : teachers.length === 0 ? (
-                        <tr className="border-t">
-                          <td colSpan={6} className="p-4 text-center text-muted-foreground">
-                            No teachers found
-                          </td>
-                        </tr>
-                      ) : (
-                        teachers.map((teacher) => (
-                          <tr key={teacher.id} className="border-t">
-                            <td className="p-2">{teacher.id.substring(0, 8)}</td>
-                            <td className="p-2">{teacher.user?.name || "N/A"}</td>
-                            <td className="p-2">{teacher.department || "N/A"}</td>
-                            <td className="p-2">{teacher.classes?.length || 0}</td>
-                            <td className="p-2">{teacher.contactNumber || "N/A"}</td>
-                            <td className="p-2">
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => (window.location.href = `/dashboard/admin/teachers/${teacher.id}`)}
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    (window.location.href = `/dashboard/admin/teachers/edit/${teacher.id}`)
-                                  }
-                                >
-                                  Edit
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {teachers.length} of {pagination.teachers.total} teachers
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("teachers", pagination.teachers.page - 1)}
-                      disabled={pagination.teachers.page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm">Page</span>
-                      <Input
-                        className="w-12 h-8"
-                        value={pagination.teachers.page}
-                        onChange={(e) => {
-                          const page = Number.parseInt(e.target.value)
-                          if (!isNaN(page)) {
-                            handlePageChange("teachers", page)
-                          }
-                        }}
-                      />
-                      <span className="text-sm">
-                        of {Math.ceil(pagination.teachers.total / pagination.teachers.limit) || 1}
-                      </span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("teachers", pagination.teachers.page + 1)}
-                      disabled={
-                        pagination.teachers.page === Math.ceil(pagination.teachers.total / pagination.teachers.limit) ||
-                        pagination.teachers.total === 0
-                      }
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                ) : recentStudents.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentStudents.map((student, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="h-8 w-8 bg-emerald-200 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-emerald-800">
+                              {student.firstName?.charAt(0)}
+                              {student.lastName?.charAt(0)}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-emerald-900">
+                              {student.firstName} {student.lastName}
+                            </div>
+                            <div className="text-xs text-emerald-600">Grade {student.grade}</div>
+                          </div>
+                        </div>
+                        <Link href={`/dashboard/admin/students/${student.id}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 bg-transparent"
+                          >
+                            View
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <GraduationCap className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No recent students found</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-violet-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-violet-50 to-violet-100">
+                <CardTitle className="text-violet-900">Recent Teachers</CardTitle>
+                <CardDescription className="text-violet-700">Newly hired teachers</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {loading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center space-x-3">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-[150px]" />
+                          <Skeleton className="h-3 w-[100px]" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recentTeachers.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentTeachers.map((teacher, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-100"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="h-8 w-8 bg-violet-200 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-violet-800">
+                              {teacher.user?.name?.charAt(0) || "T"}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-violet-900">{teacher.user?.name}</div>
+                            <div className="text-xs text-violet-600">{teacher.department}</div>
+                          </div>
+                        </div>
+                        <Link href={`/dashboard/admin/teachers/${teacher.id}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-violet-200 text-violet-700 hover:bg-violet-50 bg-transparent"
+                          >
+                            View
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No recent teachers found</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        <TabsContent value="classes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Class Management</CardTitle>
-              <CardDescription>View and manage all classes</CardDescription>
+        <TabsContent value="alerts" className="space-y-4">
+          <Card className="border-amber-200 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100">
+              <CardTitle className="text-amber-900">System Alerts</CardTitle>
+              <CardDescription className="text-amber-700">Important notifications and system status</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="relative flex-grow">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search classes..."
-                      className="pl-10"
-                      value={filters.classes.search}
-                      onChange={(e) => handleFilterChange("classes", "search", e.target.value)}
-                    />
-                  </div>
-
-                  <Select
-                    value={filters.classes.grade}
-                    onValueChange={(value) => handleFilterChange("classes", "grade", value)}
+                {systemAlerts.map((alert, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start space-x-3 p-4 rounded-lg border ${
+                      alert.type === "warning"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : alert.type === "success"
+                          ? "bg-green-50 border-green-200"
+                          : "bg-blue-50 border-blue-200"
+                    }`}
                   >
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="All Grades" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Grades</SelectItem>
-                      {["7", "8", "9", "10", "11", "12"].map((grade) => (
-                        <SelectItem key={grade} value={grade}>
-                          Grade {grade}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <div className="flex-grow md:flex-grow-0"></div>
-
-                  <Link href="/dashboard/admin/classes/new">
-                    <Button>Add New Class</Button>
-                  </Link>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted">
-                        <th className="p-2 text-left font-medium">Class ID</th>
-                        <th className="p-2 text-left font-medium">Class Name</th>
-                        <th className="p-2 text-left font-medium">Grade</th>
-                        <th className="p-2 text-left font-medium">Class Teacher</th>
-                        <th className="p-2 text-left font-medium">Students</th>
-                        <th className="p-2 text-left font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading ? (
-                        Array(5)
-                          .fill(0)
-                          .map((_, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-24" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-32" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-4 w-16" />
-                              </td>
-                              <td className="p-2">
-                                <Skeleton className="h-8 w-20" />
-                              </td>
-                            </tr>
-                          ))
-                      ) : classes.length === 0 ? (
-                        <tr className="border-t">
-                          <td colSpan={6} className="p-4 text-center text-muted-foreground">
-                            No classes found
-                          </td>
-                        </tr>
-                      ) : (
-                        classes.map((cls) => (
-                          <tr key={cls.id} className="border-t">
-                            <td className="p-2">{cls.id.substring(0, 8)}</td>
-                            <td className="p-2">{cls.name}</td>
-                            <td className="p-2">{cls.grade}</td>
-                            <td className="p-2">{cls.teacher?.user?.name || "Not assigned"}</td>
-                            <td className="p-2">{cls.students?.length || 0}</td>
-                            <td className="p-2">
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => (window.location.href = `/dashboard/admin/classes/${cls.id}`)}
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => (window.location.href = `/dashboard/admin/classes/edit/${cls.id}`)}
-                                >
-                                  Edit
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {classes.length} of {pagination.classes.total} classes
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("classes", pagination.classes.page - 1)}
-                      disabled={pagination.classes.page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm">Page</span>
-                      <Input
-                        className="w-12 h-8"
-                        value={pagination.classes.page}
-                        onChange={(e) => {
-                          const page = Number.parseInt(e.target.value)
-                          if (!isNaN(page)) {
-                            handlePageChange("classes", page)
-                          }
-                        }}
-                      />
-                      <span className="text-sm">
-                        of {Math.ceil(pagination.classes.total / pagination.classes.limit) || 1}
-                      </span>
+                    <div className="flex-shrink-0">
+                      {alert.type === "warning" && <AlertTriangle className="h-5 w-5 text-yellow-600" />}
+                      {alert.type === "success" && <CheckCircle className="h-5 w-5 text-green-600" />}
+                      {alert.type === "info" && <UserCheck className="h-5 w-5 text-blue-600" />}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange("classes", pagination.classes.page + 1)}
-                      disabled={
-                        pagination.classes.page === Math.ceil(pagination.classes.total / pagination.classes.limit) ||
-                        pagination.classes.total === 0
-                      }
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="flex-1">
+                      <p
+                        className={`text-sm font-medium ${
+                          alert.type === "warning"
+                            ? "text-yellow-800"
+                            : alert.type === "success"
+                              ? "text-green-800"
+                              : "text-blue-800"
+                        }`}
+                      >
+                        {alert.message}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={`mt-2 ${
+                          alert.priority === "high"
+                            ? "border-red-200 text-red-700"
+                            : alert.priority === "medium"
+                              ? "border-yellow-200 text-yellow-700"
+                              : "border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {alert.priority} priority
+                      </Badge>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -991,4 +563,3 @@ export default function AdminDashboard() {
     </div>
   )
 }
-

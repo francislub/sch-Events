@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { School, ArrowLeft } from "lucide-react"
 import { registerAdmin } from "@/app/actions/admin-actions"
+import Image from "next/image"
 
 // Login form schema
 const loginSchema = z.object({
@@ -159,7 +160,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center space-y-2 text-center">
-        <img src="/logo.jpg" alt="School Logo" className="h-12 w-12 object-contain" />
+        <img
+          src="/images/logo.jpg"
+          alt="School Logo"
+          className="h-12 w-12 object-contain"
+        />
           <h1 className="text-3xl font-bold">{isAdminRole ? "Admin Registration" : " Wobulenzi High School"}</h1>
           <p className="text-sm text-muted-foreground">
             {isAdminRole ? "Create a new administrator account" : "Sign in to access your school management dashboard"}
