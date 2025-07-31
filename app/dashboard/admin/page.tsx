@@ -353,7 +353,7 @@ export default function AdminDashboard() {
 
             <Card className="border-rose-200 shadow-lg">
               <CardHeader className="bg-gradient-to-r from-rose-50 to-rose-100">
-                <CardTitle className="text-rose-900">Performance Metrics</CardTitle>
+                <CardTitle className="text-rose-900">Performance For students</CardTitle>
                 <CardDescription className="text-rose-700">Academic performance overview</CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
