@@ -223,10 +223,10 @@ export default function AdminTeachers() {
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit Teacher
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push(`mailto:${teacher.user.email}`)}>
+                                {/* <DropdownMenuItem onClick={() => router.push(`mailto:${teacher.user.email}`)}>
                                   <Mail className="mr-2 h-4 w-4" />
                                   Email Teacher
-                                </DropdownMenuItem>
+                                </DropdownMenuItem> */}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-red-600"

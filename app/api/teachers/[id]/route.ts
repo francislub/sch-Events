@@ -3,19 +3,27 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("🔍 Teacher detail API called for ID:", id)
+
   try {
     const session = await getServerSession(authOptions)
+    console.log("📝 Session:", session?.user?.email, "Role:", session?.user?.role)
 
     if (!session) {
+      console.log("❌ No session found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const teacherId = id
+    console.log("👨‍🏫 Fetching teacher with ID:", teacherId)
 
     try {
       const teacher = await db.teacher.findUnique({
-        where: { id },
+        where: {
+          id: teacherId,
+        },
         include: {
           user: {
             select: {
@@ -23,8 +31,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
               name: true,
               email: true,
               role: true,
-              createdAt: true,
-              updatedAt: true,
             },
           },
           classes: {
@@ -38,53 +44,66 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
               },
             },
           },
+          subjects: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       })
 
       if (!teacher) {
+        console.log("❌ Teacher not found with ID:", teacherId)
         return NextResponse.json({ error: "Teacher not found" }, { status: 404 })
       }
 
-      return NextResponse.json({
-        ...teacher,
-        createdAt: teacher.user.createdAt,
-        updatedAt: teacher.user.updatedAt,
+      console.log("✅ Teacher found:", teacher.firstName, teacher.lastName)
+      console.log("📊 Teacher data:", {
+        classes: teacher.classes?.length || 0,
+        subjects: teacher.subjects?.length || 0,
+        totalStudents: teacher.classes?.reduce((acc, cls) => acc + cls.students.length, 0) || 0,
       })
+
+      return NextResponse.json(teacher)
     } catch (dbError) {
-      console.error("Database error:", dbError)
+      console.log("💥 Database error fetching teacher:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to fetch teacher data" }, { status: 500 })
     }
   } catch (error) {
-    console.error("Error fetching teacher:", error)
+    console.log("💥 Error in teacher API:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("✏️ Teacher update API called for ID:", id)
+
   try {
     const session = await getServerSession(authOptions)
 
     if (!session || session.user.role !== "ADMIN") {
+      console.log("❌ Unauthorized update attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
     const body = await req.json()
+    console.log("📝 Update data:", body)
 
     try {
       const updatedTeacher = await db.teacher.update({
         where: { id },
         data: {
-          department: body.department,
-          qualification: body.qualification,
-          contactNumber: body.contactNumber,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : undefined,
+          gender: body.gender,
+          phone: body.phone,
           address: body.address,
-          user: {
-            update: {
-              name: body.name,
-              email: body.email,
-            },
-          },
+          qualification: body.qualification,
+          experience: body.experience,
+          salary: body.salary ? Number.parseFloat(body.salary) : undefined,
         },
         include: {
           user: {
@@ -92,7 +111,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
               id: true,
               name: true,
               email: true,
-              role: true,
             },
           },
           classes: {
@@ -106,62 +124,52 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
               },
             },
           },
+          subjects: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       })
 
+      console.log("✅ Teacher updated successfully")
       return NextResponse.json(updatedTeacher)
     } catch (dbError) {
-      console.error("Database error:", dbError)
+      console.log("💥 Database error updating teacher:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to update teacher" }, { status: 500 })
     }
   } catch (error) {
-    console.error("Error updating teacher:", error)
+    console.log("💥 Error updating teacher:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("🗑️ Teacher delete API called for ID:", id)
+
   try {
     const session = await getServerSession(authOptions)
 
     if (!session || session.user.role !== "ADMIN") {
+      console.log("❌ Unauthorized delete attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
-
     try {
-      // Check if teacher has classes assigned
-      const teacher = await db.teacher.findUnique({
-        where: { id },
-        include: {
-          classes: true,
-        },
-      })
-
-      if (!teacher) {
-        return NextResponse.json({ error: "Teacher not found" }, { status: 404 })
-      }
-
-      if (teacher.classes.length > 0) {
-        return NextResponse.json(
-          { error: "Cannot delete teacher with assigned classes. Please reassign classes first." },
-          { status: 400 },
-        )
-      }
-
-      // Delete the teacher (this will cascade delete the user due to onDelete: Cascade)
       await db.teacher.delete({
         where: { id },
       })
 
+      console.log("✅ Teacher deleted successfully")
       return NextResponse.json({ success: true })
     } catch (dbError) {
-      console.error("Database error:", dbError)
+      console.log("💥 Database error deleting teacher:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to delete teacher" }, { status: 500 })
     }
   } catch (error) {
-    console.error("Error deleting teacher:", error)
+    console.log("💥 Error deleting teacher:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -3,8 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  console.log("🔍 Student detail API called for ID:", params.id)
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("🔍 Student detail API called for ID:", id)
 
   try {
     const session = await getServerSession(authOptions)
@@ -15,7 +16,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const studentId = params.id
+    const studentId = id
     console.log("🎓 Fetching student with ID:", studentId)
 
     try {
@@ -63,13 +64,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
               createdAt: "desc",
             },
             take: 10,
-            include: {
-              subject: {
-                select: {
-                  name: true,
-                },
-              },
-            },
           },
           attendances: {
             orderBy: {
@@ -109,17 +103,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
       return NextResponse.json(student)
     } catch (dbError) {
-      console.error("💥 Database error fetching student:", dbError)
+      console.log("💥 Database error fetching student:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to fetch student data" }, { status: 500 })
     }
   } catch (error) {
-    console.error("💥 Error in student API:", error)
+    console.log("💥 Error in student API:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  console.log("✏️ Student update API called for ID:", params.id)
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("✏️ Student update API called for ID:", id)
 
   try {
     const session = await getServerSession(authOptions)
@@ -129,7 +124,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
     const body = await req.json()
     console.log("📝 Update data:", body)
 
@@ -187,17 +181,18 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       console.log("✅ Student updated successfully")
       return NextResponse.json(updatedStudent)
     } catch (dbError) {
-      console.error("💥 Database error updating student:", dbError)
+      console.log("💥 Database error updating student:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to update student" }, { status: 500 })
     }
   } catch (error) {
-    console.error("💥 Error updating student:", error)
+    console.log("💥 Error updating student:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  console.log("🗑️ Student delete API called for ID:", params.id)
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  console.log("🗑️ Student delete API called for ID:", id)
 
   try {
     const session = await getServerSession(authOptions)
@@ -207,8 +202,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
-
     try {
       await db.student.delete({
         where: { id },
@@ -217,11 +210,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       console.log("✅ Student deleted successfully")
       return NextResponse.json({ success: true })
     } catch (dbError) {
-      console.error("💥 Database error deleting student:", dbError)
+      console.log("💥 Database error deleting student:", dbError instanceof Error ? dbError.message : String(dbError))
       return NextResponse.json({ error: "Failed to delete student" }, { status: 500 })
     }
   } catch (error) {
-    console.error("💥 Error deleting student:", error)
+    console.log("💥 Error deleting student:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

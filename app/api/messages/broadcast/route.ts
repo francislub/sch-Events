@@ -56,41 +56,52 @@ export async function POST(req: Request) {
 
     // Create messages for all target users
     console.log("💬 Creating messages for all target users...")
-    const messages = await Promise.all(
-      targetUsers.map(async (user) => {
-        try {
-          const message = await db.message.create({
-            data: {
-              content,
-              senderId: session.user.id,
-              recipientId: user.id,
-            },
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-              recipient: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
+    const messagePromises = targetUsers.map(async (user) => {
+      try {
+        const message = await db.message.create({
+          data: {
+            content,
+            sender: {
+              connect: {
+                id: session.user.id,
               },
             },
-          })
-          console.log("✅ Message created for:", user.name)
-          return message
-        } catch (error) {
-          console.error("❌ Failed to create message for user:", user.name, error)
-          return null
-        }
-      }),
-    )
+            recipient: {
+              connect: {
+                id: user.id,
+              },
+            },
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            recipient: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        })
+        console.log("✅ Message created for:", user.name)
+        return message
+      } catch (messageError) {
+        console.log(
+          "❌ Failed to create message for user:",
+          user.name,
+          messageError instanceof Error ? messageError.message : String(messageError),
+        )
+        return null
+      }
+    })
 
+    const messages = await Promise.all(messagePromises)
     const successfulMessages = messages.filter(Boolean)
     console.log("📊 Successfully sent", successfulMessages.length, "out of", targetUsers.length, "messages")
 
@@ -101,7 +112,7 @@ export async function POST(req: Request) {
       targetRole,
     })
   } catch (error) {
-    console.error("💥 Broadcast message error:", error)
+    console.log("💥 Broadcast message error:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
